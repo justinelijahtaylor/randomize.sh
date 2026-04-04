@@ -76,7 +76,7 @@ export const irregularFormesSM: number[] = [ Species.SMFormes.castformF, Species
 
 export const irregularFormesUSUM: number[] = [ Species.USUMFormes.castformF, Species.USUMFormes.castformW, Species.USUMFormes.castformI, Species.USUMFormes.darmanitanZ, Species.USUMFormes.meloettaP, Species.USUMFormes.kyuremW, Species.USUMFormes.kyuremB, Species.USUMFormes.gengarMega, Species.USUMFormes.gardevoirMega, Species.USUMFormes.ampharosMega, Species.USUMFormes.venusaurMega, Species.USUMFormes.charizardMegaX, Species.USUMFormes.charizardMegaY, Species.USUMFormes.mewtwoMegaX, Species.USUMFormes.mewtwoMegaY, Species.USUMFormes.blazikenMega, Species.USUMFormes.medichamMega, Species.USUMFormes.houndoomMega, Species.USUMFormes.aggronMega, Species.USUMFormes.banetteMega, Species.USUMFormes.tyranitarMega, Species.USUMFormes.scizorMega, Species.USUMFormes.pinsirMega, Species.USUMFormes.aerodactylMega, Species.USUMFormes.lucarioMega, Species.USUMFormes.abomasnowMega, Species.USUMFormes.aegislashB, Species.USUMFormes.blastoiseMega, Species.USUMFormes.kangaskhanMega, Species.USUMFormes.gyaradosMega, Species.USUMFormes.absolMega, Species.USUMFormes.alakazamMega, Species.USUMFormes.heracrossMega, Species.USUMFormes.mawileMega, Species.USUMFormes.manectricMega, Species.USUMFormes.garchompMega, Species.USUMFormes.latiosMega, Species.USUMFormes.latiasMega, Species.USUMFormes.swampertMega, Species.USUMFormes.sceptileMega, Species.USUMFormes.sableyeMega, Species.USUMFormes.altariaMega, Species.USUMFormes.galladeMega, Species.USUMFormes.audinoMega, Species.USUMFormes.sharpedoMega, Species.USUMFormes.slowbroMega, Species.USUMFormes.steelixMega, Species.USUMFormes.pidgeotMega, Species.USUMFormes.glalieMega, Species.USUMFormes.diancieMega, Species.USUMFormes.metagrossMega, Species.USUMFormes.kyogreP, Species.USUMFormes.groudonP, Species.USUMFormes.rayquazaMega, Species.USUMFormes.cameruptMega, Species.USUMFormes.lopunnyMega, Species.USUMFormes.salamenceMega, Species.USUMFormes.beedrillMega, Species.USUMFormes.wishiwashiS, Species.USUMFormes.greninjaA, Species.USUMFormes.zygardeC, Species.USUMFormes.miniorC, Species.USUMFormes.necrozmaDM, Species.USUMFormes.necrozmaDW, Species.USUMFormes.necrozmaU ];
 
-// TODO: MoveCategory[] moveCategoryIndices = { MoveCategory.STATUS, MoveCategory.PHYSICAL, MoveCategory.SPECIAL };
+export const moveCategoryIndices: MoveCategory[] = [MoveCategory.STATUS, MoveCategory.PHYSICAL, MoveCategory.SPECIAL];
 
 export function moveCategoryToByte(cat: MoveCategory): number {
     switch (cat) {
@@ -824,7 +824,7 @@ function setupRelevantEncounterFiles(romType: number): boolean[] {
 
 let allowedItemsSM: ItemList;
 let allowedItemsUSUM: ItemList;
-let nonBadItems: ItemList;
+export let nonBadItems: ItemList;
 let regularShopItemsSM: number[] = [];
 let regularShopItemsUSUM: number[] = [];
 let opShopItems: number[] = [];

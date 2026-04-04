@@ -28,7 +28,7 @@ export const introRepeatedCryOffsetXY = "1080BDE800002041000000008D001000";
 const speciesToMegaStoneXY = setupSpeciesToMegaStone(Type_XY);
 export const speciesToMegaStoneORAS = setupSpeciesToMegaStone(Type_ORAS);
 
-const formeSuffixes = setupFormeSuffixes();
+export const formeSuffixes = setupFormeSuffixes();
 const dummyFormeSuffixes = setupDummyFormeSuffixes();
 const formeSuffixesByBaseForme = setupFormeSuffixesByBaseForme();
 
@@ -47,7 +47,7 @@ export const highestAbilityIndexORAS = Abilities.deltaStream;
 
 export const uselessAbilities: number[] = [Abilities.forecast, Abilities.multitype, Abilities.flowerGift, Abilities.zenMode, Abilities.stanceChange];
 
-// TODO: MoveCategory[] moveCategoryIndices = { MoveCategory.STATUS, MoveCategory.PHYSICAL, MoveCategory.SPECIAL };
+export const moveCategoryIndices: MoveCategory[] = [MoveCategory.STATUS, MoveCategory.PHYSICAL, MoveCategory.SPECIAL];
 
 export function moveCategoryToByte(cat: MoveCategory): number {
     switch (cat) {
