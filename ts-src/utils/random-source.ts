@@ -73,7 +73,7 @@ class JavaRandom {
   nextDouble(): number {
     const high = BigInt(this.next(26)) << 27n;
     const low = BigInt(this.next(27));
-    return Number(high + low) / (1 << 53);
+    return Number(high + low) / 2 ** 53;
   }
 
   nextGaussian(): number {
