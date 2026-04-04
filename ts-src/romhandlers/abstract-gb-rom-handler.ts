@@ -36,8 +36,13 @@ export abstract class AbstractGBRomHandler extends AbstractRomHandler {
 
   saveRomFile(filename: string, _seed: number): boolean {
     this.savingRom();
-    // In a real implementation, would write rom bytes to file
-    // For now, return true to indicate success
+    const fs = require('fs') as typeof import('fs');
+    const path = require('path') as typeof import('path');
+    const dir = path.dirname(filename);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(filename, this.rom);
     return true;
   }
 
@@ -77,9 +82,10 @@ export abstract class AbstractGBRomHandler extends AbstractRomHandler {
   abstract loadedRom(): void;
   abstract savingRom(): void;
 
-  protected static loadFile(_filename: string): Uint8Array {
-    // Stub: in real implementation, reads from filesystem
-    return new Uint8Array(0);
+  protected static loadFile(filename: string): Uint8Array {
+    const fs = require('fs') as typeof import('fs');
+    const buffer = fs.readFileSync(filename);
+    return new Uint8Array(buffer);
   }
 
   protected readByteIntoFlags(

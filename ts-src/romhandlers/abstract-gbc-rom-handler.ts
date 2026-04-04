@@ -25,9 +25,40 @@ export abstract class AbstractGBCRomHandler extends AbstractGBRomHandler {
     this.longestTableToken = 0;
   }
 
-  protected readTextTable(_name: string): void {
-    // In a real implementation, this reads a .tbl config file
-    // Stubbed for now since it requires file system access
+  protected readTextTable(name: string): void {
+    const fs = require('fs') as typeof import('fs');
+    const path = require('path') as typeof import('path');
+    // Look for the .tbl file in the Java config directory
+    const configDir = path.resolve(__dirname, '../../src/com/dabomstew/pkrandom/config');
+    const filePath = path.join(configDir, name + '.tbl');
+    if (!fs.existsSync(filePath)) {
+      return;
+    }
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const lines = content.split('\n');
+    for (const line of lines) {
+      const q = line.trim();
+      if (q === '') continue;
+      const eqIdx = q.indexOf('=');
+      if (eqIdx < 0) continue;
+      const hexStr = q.substring(0, eqIdx);
+      let value = q.substring(eqIdx + 1);
+      if (value.endsWith('\r')) {
+        value = value.substring(0, value.length - 1);
+      }
+      const hexcode = parseInt(hexStr, 16);
+      if (isNaN(hexcode) || hexcode < 0 || hexcode > 255) continue;
+      if (this['tb'][hexcode] != null) {
+        const oldMatch = this['tb'][hexcode]!;
+        this['tb'][hexcode] = null;
+        if (this['d'].get(oldMatch) === hexcode) {
+          this['d'].delete(oldMatch);
+        }
+      }
+      this['tb'][hexcode] = value;
+      this['longestTableToken'] = Math.max(this['longestTableToken'], value.length);
+      this['d'].set(value, hexcode);
+    }
   }
 
   protected readString(
