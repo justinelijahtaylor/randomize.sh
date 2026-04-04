@@ -9,6 +9,9 @@
  * Licensed under the terms of the GPL v3+.
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
 import { AbstractGBCRomHandler } from './abstract-gbc-rom-handler';
 import type { LogStream, RomHandler } from './rom-handler';
 import { TrainerNameMode, RomHandlerFactory } from './rom-handler';
@@ -757,9 +760,7 @@ export class Gen1RomHandler extends AbstractGBCRomHandler {
     } else {
       // Load from INI file
       try {
-        const fs = require('fs') as typeof import('fs');
-        const path = require('path') as typeof import('path');
-        const iniPath = path.resolve(__dirname, '../../src/com/dabomstew/pkrandom/config/gen1_offsets.ini');
+        const iniPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../src/com/dabomstew/pkrandom/config/gen1_offsets.ini');
         if (fs.existsSync(iniPath)) {
           const iniText = fs.readFileSync(iniPath, 'utf-8');
           this.romEntries = parseGen1OffsetsIni(iniText);
@@ -788,9 +789,7 @@ export class Gen1RomHandler extends AbstractGBCRomHandler {
     // Load text tables
     this.clearTextTables();
     this.textTables = createTextTables();
-    const fs = require('fs') as typeof import('fs');
-    const path = require('path') as typeof import('path');
-    const configDir = path.resolve(__dirname, '../../src/com/dabomstew/pkrandom/config');
+    const configDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../src/com/dabomstew/pkrandom/config');
 
     // Read base text table (rby_english for English ROMs)
     const baseTableFile = entry.extraTableFile || 'rby_english';
@@ -3639,9 +3638,7 @@ export class Gen1RomHandlerFactory extends RomHandlerFactory {
     } else {
       // Try to load from INI file
       try {
-        const fs = require('fs') as typeof import('fs');
-        const path = require('path') as typeof import('path');
-        const iniPath = path.resolve(__dirname, '../../src/com/dabomstew/pkrandom/config/gen1_offsets.ini');
+        const iniPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../src/com/dabomstew/pkrandom/config/gen1_offsets.ini');
         if (fs.existsSync(iniPath)) {
           const iniText = fs.readFileSync(iniPath, 'utf-8');
           this.romEntries = parseGen1OffsetsIni(iniText);
@@ -3656,7 +3653,6 @@ export class Gen1RomHandlerFactory extends RomHandlerFactory {
 
   isLoadable(filename: string): boolean {
     try {
-      const fs = require('fs') as typeof import('fs');
       const stats = fs.statSync(filename);
       if (stats.size < GBConstants.minRomSize || stats.size > GBConstants.maxRomSize) {
         return false;

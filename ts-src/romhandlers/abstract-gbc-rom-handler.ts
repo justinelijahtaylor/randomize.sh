@@ -5,6 +5,9 @@
  * Ported from AbstractGBCRomHandler.java
  */
 
+import * as fs from "fs";
+import * as path from "path";
+import { fileURLToPath } from "url";
 import { AbstractGBRomHandler } from "./abstract-gb-rom-handler";
 import type { LogStream } from "./rom-handler";
 import type { RandomInstance } from "../utils/random-source";
@@ -26,10 +29,8 @@ export abstract class AbstractGBCRomHandler extends AbstractGBRomHandler {
   }
 
   protected readTextTable(name: string): void {
-    const fs = require('fs') as typeof import('fs');
-    const path = require('path') as typeof import('path');
     // Look for the .tbl file in the Java config directory
-    const configDir = path.resolve(__dirname, '../../src/com/dabomstew/pkrandom/config');
+    const configDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../src/com/dabomstew/pkrandom/config');
     const filePath = path.join(configDir, name + '.tbl');
     if (!fs.existsSync(filePath)) {
       return;

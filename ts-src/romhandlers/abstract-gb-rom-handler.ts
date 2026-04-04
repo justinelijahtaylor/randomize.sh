@@ -5,6 +5,8 @@
  * Ported from AbstractGBRomHandler.java
  */
 
+import * as fs from "fs";
+import * as path from "path";
 import { AbstractRomHandler } from "./abstract-rom-handler";
 import type { LogStream } from "./rom-handler";
 import type { RandomInstance } from "../utils/random-source";
@@ -36,8 +38,6 @@ export abstract class AbstractGBRomHandler extends AbstractRomHandler {
 
   saveRomFile(filename: string, _seed: number): boolean {
     this.savingRom();
-    const fs = require('fs') as typeof import('fs');
-    const path = require('path') as typeof import('path');
     const dir = path.dirname(filename);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -83,7 +83,6 @@ export abstract class AbstractGBRomHandler extends AbstractRomHandler {
   abstract savingRom(): void;
 
   protected static loadFile(filename: string): Uint8Array {
-    const fs = require('fs') as typeof import('fs');
     const buffer = fs.readFileSync(filename);
     return new Uint8Array(buffer);
   }
