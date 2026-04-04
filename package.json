@@ -1,6 +1,9 @@
 {
   "name": "universal-pokemon-randomizer-zx",
   "type": "module",
+  "bin": {
+    "randomizer-cli": "dist/cli/index.js"
+  },
   "scripts": {
     "build": "tsc",
     "test": "vitest run",

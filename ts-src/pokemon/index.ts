@@ -28,3 +28,4 @@ export { GenRestrictions } from "./gen-restrictions";
 export { PickupItem } from "./pickup-item";
 export { Shop } from "./shop";
 export { TotemPokemon } from "./totem-pokemon";
+export { FormeInfo } from "./forme-info";

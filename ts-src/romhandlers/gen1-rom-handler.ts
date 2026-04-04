@@ -9,10 +9,16 @@
  * Licensed under the terms of the GPL v3+.
  */
 
+import { AbstractGBCRomHandler } from './abstract-gbc-rom-handler';
+import type { LogStream, RomHandler } from './rom-handler';
+import { TrainerNameMode, RomHandlerFactory } from './rom-handler';
+import type { RandomInstance } from '../utils/random-source';
+import type { Settings } from '../config/settings';
 import * as Gen1Constants from '../constants/gen1-constants';
 import * as GBConstants from '../constants/gb-constants';
 import * as GlobalConstants from '../constants/global-constants';
 import * as Moves from '../constants/moves';
+import * as Species from '../constants/species';
 import { Pokemon } from '../pokemon/pokemon';
 import { Move, MoveStatChange } from '../pokemon/move';
 import { MoveCategory } from '../pokemon/move-category';
@@ -22,6 +28,29 @@ import { StatChangeMoveType } from '../pokemon/stat-change-move-type';
 import { StatusMoveType } from '../pokemon/status-move-type';
 import { StatusType } from '../pokemon/status-type';
 import { CriticalChance } from '../pokemon/critical-chance';
+import { Type, isHackOnly } from '../pokemon/type';
+import { Stat } from '../pokemon/stat';
+import { StatChange } from '../pokemon/stat-change';
+import { ItemList } from '../pokemon/item-list';
+import { MiscTweak } from '../utils/misc-tweak';
+import type { MegaEvolution } from '../pokemon/mega-evolution';
+import { MoveLearnt } from '../pokemon/move-learnt';
+import { RandomizationException } from '../exceptions';
+import type { Trainer } from '../pokemon/trainer';
+import type { TrainerPokemon } from '../pokemon/trainer-pokemon';
+import type { EncounterSet } from '../pokemon/encounter-set';
+import { StaticEncounter } from '../pokemon/static-encounter';
+import type { TotemPokemon } from '../pokemon/totem-pokemon';
+import { IngameTrade } from '../pokemon/ingame-trade';
+import { Shop } from '../pokemon/shop';
+import type { EvolutionUpdate } from './evolution-update';
+import { Effectiveness } from '../pokemon/effectiveness';
+import { Evolution } from '../pokemon/evolution';
+import {
+  EvolutionType,
+  evolutionTypeFromIndex,
+  evolutionTypeToIndex,
+} from '../pokemon/evolution-type';
 
 // ---------------------------------------------------------------------------
 // ROM Entry (parsed from gen1_offsets.ini in the Java version)
@@ -69,7 +98,7 @@ function romEntryGetValue(entry: RomEntry, key: string): number {
 }
 
 // ---------------------------------------------------------------------------
-// Text table helpers (ported from AbstractGBCRomHandler)
+// Text table helpers (standalone, kept for backward compatibility)
 // ---------------------------------------------------------------------------
 
 export interface TextTables {
@@ -115,21 +144,25 @@ export function readStringFromRom(
   offset: number,
   maxLength: number,
   textEngineMode: boolean,
-  tables: TextTables,
+  tables: TextTables
 ): string {
   let result = '';
   for (let c = 0; c < maxLength; c++) {
-    const currChar = rom[offset + c] & 0xFF;
+    const currChar = rom[offset + c] & 0xff;
     if (tables.tb[currChar] != null) {
       result += tables.tb[currChar];
-      if (textEngineMode && (tables.tb[currChar] === '\\r' || tables.tb[currChar] === '\\e')) {
+      if (
+        textEngineMode &&
+        (tables.tb[currChar] === '\\r' || tables.tb[currChar] === '\\e')
+      ) {
         break;
       }
     } else {
       if (currChar === GBConstants.stringTerminator) {
         break;
       } else {
-        result += '\\x' + currChar.toString(16).padStart(2, '0').toUpperCase();
+        result +=
+          '\\x' + currChar.toString(16).padStart(2, '0').toUpperCase();
       }
     }
   }
@@ -139,7 +172,7 @@ export function readStringFromRom(
 export function lengthOfStringAt(
   rom: Uint8Array,
   offset: number,
-  textEngineMode: boolean,
+  textEngineMode: boolean
 ): number {
   let len = 0;
   while (
@@ -160,24 +193,39 @@ export function lengthOfStringAt(
   return len;
 }
 
-export function translateString(text: string, tables: TextTables): Uint8Array {
+export function translateString(
+  text: string,
+  tables: TextTables
+): Uint8Array {
   const bytes: number[] = [];
   let remaining = text;
   while (remaining.length !== 0) {
     let i = Math.max(0, tables.longestTableToken - remaining.length);
-    if (remaining.charAt(0) === '\\' && remaining.length > 1 && remaining.charAt(1) === 'x') {
+    if (
+      remaining.charAt(0) === '\\' &&
+      remaining.length > 1 &&
+      remaining.charAt(1) === 'x'
+    ) {
       bytes.push(parseInt(remaining.substring(2, 4), 16));
       remaining = remaining.substring(4);
     } else {
       while (
-        !(tables.d.has(remaining.substring(0, tables.longestTableToken - i)) || i === tables.longestTableToken)
+        !(
+          tables.d.has(
+            remaining.substring(0, tables.longestTableToken - i)
+          ) || i === tables.longestTableToken
+        )
       ) {
         i++;
       }
       if (i === tables.longestTableToken) {
         remaining = remaining.substring(1);
       } else {
-        bytes.push(tables.d.get(remaining.substring(0, tables.longestTableToken - i))! & 0xFF);
+        bytes.push(
+          tables.d.get(
+            remaining.substring(0, tables.longestTableToken - i)
+          )! & 0xff
+        );
         remaining = remaining.substring(tables.longestTableToken - i);
       }
     }
@@ -186,16 +234,20 @@ export function translateString(text: string, tables: TextTables): Uint8Array {
 }
 
 // ---------------------------------------------------------------------------
-// Low-level ROM reading helpers (ported from AbstractGBRomHandler)
+// Low-level ROM reading helpers (standalone, kept for backward compatibility)
 // ---------------------------------------------------------------------------
 
 export function readWord(data: Uint8Array, offset: number): number {
-  return (data[offset] & 0xFF) + ((data[offset + 1] & 0xFF) << 8);
+  return (data[offset] & 0xff) + ((data[offset + 1] & 0xff) << 8);
 }
 
-export function writeWord(data: Uint8Array, offset: number, value: number): void {
-  data[offset] = value & 0xFF;
-  data[offset + 1] = (value >> 8) & 0xFF;
+export function writeWord(
+  data: Uint8Array,
+  offset: number,
+  value: number
+): void {
+  data[offset] = value & 0xff;
+  data[offset + 1] = (value >> 8) & 0xff;
 }
 
 export function romSig(rom: Uint8Array, sig: string): boolean {
@@ -243,7 +295,10 @@ export function calculateOffset(bank: number, pointer: number): number {
 // ---------------------------------------------------------------------------
 
 function idToType(value: number, romEntry: RomEntry): string | null {
-  if (value < Gen1Constants.typeTable.length && Gen1Constants.typeTable[value] != null) {
+  if (
+    value < Gen1Constants.typeTable.length &&
+    Gen1Constants.typeTable[value] != null
+  ) {
     return Gen1Constants.typeTable[value];
   }
   if (romEntry.extraTypeLookup.has(value)) {
@@ -254,7 +309,7 @@ function idToType(value: number, romEntry: RomEntry): string | null {
 
 function typeToByte(type: string | null, romEntry: RomEntry): number {
   if (type == null) {
-    return 0x00; // revert to normal
+    return 0x00;
   }
   if (romEntry.extraTypeReverse.has(type)) {
     return romEntry.extraTypeReverse.get(type)!;
@@ -266,32 +321,49 @@ function typeToByte(type: string | null, romEntry: RomEntry): number {
 // ROM detection
 // ---------------------------------------------------------------------------
 
-/**
- * Check whether the given ROM data matches a known Gen 1 ROM entry.
- * Returns the matching RomEntry or null.
- */
-export function checkRomEntry(rom: Uint8Array, romEntries: RomEntry[]): RomEntry | null {
-  const version = rom[GBConstants.versionOffset] & 0xFF;
-  const nonjap = rom[GBConstants.jpFlagOffset] & 0xFF;
-  const crcInHeader = ((rom[GBConstants.crcOffset] & 0xFF) << 8) | (rom[GBConstants.crcOffset + 1] & 0xFF);
+export function checkRomEntry(
+  rom: Uint8Array,
+  romEntries: RomEntry[]
+): RomEntry | null {
+  const version = rom[GBConstants.versionOffset] & 0xff;
+  const nonjap = rom[GBConstants.jpFlagOffset] & 0xff;
+  const crcInHeader =
+    ((rom[GBConstants.crcOffset] & 0xff) << 8) |
+    (rom[GBConstants.crcOffset + 1] & 0xff);
 
-  // Check for specific CRC first
   for (const re of romEntries) {
-    if (romSig(rom, re.romName) && re.version === version && re.nonJapanese === nonjap && re.crcInHeader === crcInHeader) {
+    if (
+      romSig(rom, re.romName) &&
+      re.version === version &&
+      re.nonJapanese === nonjap &&
+      re.crcInHeader === crcInHeader
+    ) {
       return re;
     }
   }
-  // Now check for non-specific-CRC entries
   for (const re of romEntries) {
-    if (romSig(rom, re.romName) && re.version === version && re.nonJapanese === nonjap && re.crcInHeader === -1) {
+    if (
+      romSig(rom, re.romName) &&
+      re.version === version &&
+      re.nonJapanese === nonjap &&
+      re.crcInHeader === -1
+    ) {
       return re;
     }
   }
   return null;
 }
 
-export function detectRomInner(rom: Uint8Array, romSize: number, romEntries: RomEntry[]): boolean {
-  return romSize >= GBConstants.minRomSize && romSize <= GBConstants.maxRomSize && checkRomEntry(rom, romEntries) !== null;
+export function detectRomInner(
+  rom: Uint8Array,
+  romSize: number,
+  romEntries: RomEntry[]
+): boolean {
+  return (
+    romSize >= GBConstants.minRomSize &&
+    romSize <= GBConstants.maxRomSize &&
+    checkRomEntry(rom, romEntries) !== null
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -302,27 +374,36 @@ export function loadBasicPokeStats(
   pkmn: Pokemon,
   rom: Uint8Array,
   offset: number,
-  romEntry: RomEntry,
+  romEntry: RomEntry
 ): void {
-  pkmn.hp = rom[offset + Gen1Constants.bsHPOffset] & 0xFF;
-  pkmn.attack = rom[offset + Gen1Constants.bsAttackOffset] & 0xFF;
-  pkmn.defense = rom[offset + Gen1Constants.bsDefenseOffset] & 0xFF;
-  pkmn.speed = rom[offset + Gen1Constants.bsSpeedOffset] & 0xFF;
-  pkmn.special = rom[offset + Gen1Constants.bsSpecialOffset] & 0xFF;
-  // Type
-  pkmn.primaryType = idToType(rom[offset + Gen1Constants.bsPrimaryTypeOffset] & 0xFF, romEntry) as any;
-  pkmn.secondaryType = idToType(rom[offset + Gen1Constants.bsSecondaryTypeOffset] & 0xFF, romEntry) as any;
-  // Only one type?
+  pkmn.hp = rom[offset + Gen1Constants.bsHPOffset] & 0xff;
+  pkmn.attack = rom[offset + Gen1Constants.bsAttackOffset] & 0xff;
+  pkmn.defense = rom[offset + Gen1Constants.bsDefenseOffset] & 0xff;
+  pkmn.speed = rom[offset + Gen1Constants.bsSpeedOffset] & 0xff;
+  pkmn.special = rom[offset + Gen1Constants.bsSpecialOffset] & 0xff;
+  pkmn.primaryType = idToType(
+    rom[offset + Gen1Constants.bsPrimaryTypeOffset] & 0xff,
+    romEntry
+  ) as any;
+  pkmn.secondaryType = idToType(
+    rom[offset + Gen1Constants.bsSecondaryTypeOffset] & 0xff,
+    romEntry
+  ) as any;
   if (pkmn.secondaryType === pkmn.primaryType) {
     pkmn.secondaryType = null;
   }
-  pkmn.catchRate = rom[offset + Gen1Constants.bsCatchRateOffset] & 0xFF;
-  pkmn.expYield = rom[offset + Gen1Constants.bsExpYieldOffset] & 0xFF;
-  const growthCurve = expCurveFromByte(rom[offset + Gen1Constants.bsGrowthCurveOffset]);
+  pkmn.catchRate = rom[offset + Gen1Constants.bsCatchRateOffset] & 0xff;
+  pkmn.expYield = rom[offset + Gen1Constants.bsExpYieldOffset] & 0xff;
+  const growthCurve = expCurveFromByte(
+    rom[offset + Gen1Constants.bsGrowthCurveOffset]
+  );
   if (growthCurve != null) {
     pkmn.growthCurve = growthCurve;
   }
-  pkmn.frontSpritePointer = readWord(rom, offset + Gen1Constants.bsFrontSpriteOffset);
+  pkmn.frontSpritePointer = readWord(
+    rom,
+    offset + Gen1Constants.bsFrontSpriteOffset
+  );
 
   pkmn.guaranteedHeldItem = -1;
   pkmn.commonHeldItem = -1;
@@ -334,21 +415,30 @@ export function saveBasicPokeStats(
   pkmn: Pokemon,
   rom: Uint8Array,
   offset: number,
-  romEntry: RomEntry,
+  romEntry: RomEntry
 ): void {
   rom[offset + Gen1Constants.bsHPOffset] = pkmn.hp;
   rom[offset + Gen1Constants.bsAttackOffset] = pkmn.attack;
   rom[offset + Gen1Constants.bsDefenseOffset] = pkmn.defense;
   rom[offset + Gen1Constants.bsSpeedOffset] = pkmn.speed;
   rom[offset + Gen1Constants.bsSpecialOffset] = pkmn.special;
-  rom[offset + Gen1Constants.bsPrimaryTypeOffset] = typeToByte(pkmn.primaryType as any, romEntry);
+  rom[offset + Gen1Constants.bsPrimaryTypeOffset] = typeToByte(
+    pkmn.primaryType as any,
+    romEntry
+  );
   if (pkmn.secondaryType == null) {
-    rom[offset + Gen1Constants.bsSecondaryTypeOffset] = rom[offset + Gen1Constants.bsPrimaryTypeOffset];
+    rom[offset + Gen1Constants.bsSecondaryTypeOffset] =
+      rom[offset + Gen1Constants.bsPrimaryTypeOffset];
   } else {
-    rom[offset + Gen1Constants.bsSecondaryTypeOffset] = typeToByte(pkmn.secondaryType as any, romEntry);
+    rom[offset + Gen1Constants.bsSecondaryTypeOffset] = typeToByte(
+      pkmn.secondaryType as any,
+      romEntry
+    );
   }
   rom[offset + Gen1Constants.bsCatchRateOffset] = pkmn.catchRate;
-  rom[offset + Gen1Constants.bsGrowthCurveOffset] = expCurveToByte(pkmn.growthCurve);
+  rom[offset + Gen1Constants.bsGrowthCurveOffset] = expCurveToByte(
+    pkmn.growthCurve
+  );
   rom[offset + Gen1Constants.bsExpYieldOffset] = pkmn.expYield;
 }
 
@@ -361,20 +451,25 @@ export function loadMoveData(
   movesOffset: number,
   moveIndex: number,
   moveName: string,
-  romEntry: RomEntry,
+  romEntry: RomEntry
 ): Move {
   const i = moveIndex;
   const base = movesOffset + (i - 1) * 6;
   const move = new Move();
   move.name = moveName;
   move.internalId = i;
-  move.effectIndex = rom[base + 1] & 0xFF;
-  move.hitratio = ((rom[base + 4] & 0xFF)) / 255.0 * 100;
-  move.power = rom[base + 2] & 0xFF;
-  move.pp = rom[base + 5] & 0xFF;
-  move.type = idToType(rom[base + 3] & 0xFF, romEntry) as any;
-  move.category = GBConstants.physicalTypes.has(move.type as any) ? MoveCategory.PHYSICAL : MoveCategory.SPECIAL;
-  if (move.power === 0 && !GlobalConstants.noPowerNonStatusMoves.includes(i)) {
+  move.effectIndex = rom[base + 1] & 0xff;
+  move.hitratio = ((rom[base + 4] & 0xff) / 255.0) * 100;
+  move.power = rom[base + 2] & 0xff;
+  move.pp = rom[base + 5] & 0xff;
+  move.type = idToType(rom[base + 3] & 0xff, romEntry) as any;
+  move.category = GBConstants.physicalTypes.has(move.type as any)
+    ? MoveCategory.PHYSICAL
+    : MoveCategory.SPECIAL;
+  if (
+    move.power === 0 &&
+    !GlobalConstants.noPowerNonStatusMoves.includes(i)
+  ) {
     move.category = MoveCategory.STATUS;
   }
 
@@ -395,7 +490,7 @@ export function saveMoveData(
   rom: Uint8Array,
   movesOffset: number,
   move: Move,
-  romEntry: RomEntry,
+  romEntry: RomEntry
 ): void {
   const i = move.internalId;
   const base = movesOffset + (i - 1) * 6;
@@ -475,7 +570,6 @@ function loadStatChangesFromEffect(move: Move): void {
       move.statChanges[0].stages = -1;
       break;
     default:
-      // Move does not have a stat-changing effect
       return;
   }
 
@@ -540,7 +634,6 @@ function loadStatusFromEffect(move: Move): void {
       break;
 
     default:
-      // Move does not have a status effect
       return;
   }
 
@@ -605,25 +698,20 @@ function loadMiscMoveInfoFromEffect(move: Move): void {
     case Gen1Constants.flinch10PercentEffect:
       move.flinchPercentChance = 10.0;
       break;
-
     case Gen1Constants.flinch30PercentEffect:
       move.flinchPercentChance = 30.0;
       break;
-
     case Gen1Constants.damageAbsorbEffect:
     case Gen1Constants.dreamEaterEffect:
       move.absorbPercent = 50;
       break;
-
     case Gen1Constants.damageRecoilEffect:
       move.recoilPercent = 25;
       break;
-
     case Gen1Constants.chargeEffect:
     case Gen1Constants.flyEffect:
       move.isChargeMove = true;
       break;
-
     case Gen1Constants.hyperBeamEffect:
       move.isRechargeMove = true;
       break;
@@ -634,14 +722,1289 @@ function loadMiscMoveInfoFromEffect(move: Move): void {
   }
 }
 
+// ===========================================================================
+// Gen1RomHandler class - extends AbstractGBCRomHandler
+// ===========================================================================
+
+export class Gen1RomHandler extends AbstractGBCRomHandler {
+  private romEntry: RomEntry = createDefaultRomEntry();
+  private pokemonList: (Pokemon | null)[] = [];
+  private pokes: (Pokemon | null)[] = [];
+  private movesList: (Move | null)[] = [];
+  private pokeNumToRBYTable: number[] = [];
+  private pokeRBYToNumTable: number[] = [];
+  private moveNumToRomTable: number[] = [];
+  private moveRomToNumTable: number[] = [];
+  private pokedexCount: number = 0;
+  private actualCRC32: number = 0;
+  private effectivenessUpdated: boolean = false;
+  private xAccNerfed: boolean = false;
+  private itemNames: string[] = [];
+
+  constructor(random: RandomInstance, logStream: LogStream | null) {
+    super(random, logStream);
+  }
+
+  // === AbstractGBRomHandler abstract methods ===
+
+  detectRom(_rom: Uint8Array): boolean {
+    return false;
+  }
+
+  loadedRom(): void {
+    // Stub
+  }
+
+  savingRom(): void {
+    // Stub
+  }
+
+  // === TRIVIAL STUBS ===
+
+  abilitiesPerPokemon(): number {
+    return 0;
+  }
+
+  highestAbilityIndex(): number {
+    return 0;
+  }
+
+  getAbilityVariations(): Map<number, number[]> {
+    return new Map();
+  }
+
+  hasMegaEvolutions(): boolean {
+    return false;
+  }
+
+  getPokemonInclFormes(): (Pokemon | null)[] {
+    return this.pokemonList;
+  }
+
+  getAltFormes(): Pokemon[] {
+    return [];
+  }
+
+  getMegaEvolutions(): MegaEvolution[] {
+    return [];
+  }
+
+  getAltFormeOfPokemon(pk: Pokemon, _forme: number): Pokemon {
+    return pk;
+  }
+
+  getIrregularFormes(): Pokemon[] {
+    return [];
+  }
+
+  hasFunctionalFormes(): boolean {
+    return false;
+  }
+
+  hasWildAltFormes(): boolean {
+    return false;
+  }
+
+  hasStarterAltFormes(): boolean {
+    return false;
+  }
+
+  getMainPlaythroughTrainers(): number[] {
+    return [];
+  }
+
+  getEliteFourTrainers(_isChallengeMode: boolean): number[] {
+    return [];
+  }
+
+  hasRivalFinalBattle(): boolean {
+    return true;
+  }
+
+  hasStaticAltFormes(): boolean {
+    return false;
+  }
+
+  hasMainGameLegendaries(): boolean {
+    return false;
+  }
+
+  getMainGameLegendaries(): number[] {
+    return [];
+  }
+
+  getSpecialMusicStatics(): number[] {
+    return [];
+  }
+
+  getTotemPokemon(): TotemPokemon[] {
+    return [];
+  }
+
+  setTotemPokemon(_totemPokemon: TotemPokemon[]): void {}
+
+  getEggMoves(): Map<number, number[]> {
+    return new Map();
+  }
+
+  setEggMoves(_eggMoves: Map<number, number[]>): void {}
+
+  hasMoveTutors(): boolean {
+    return false;
+  }
+
+  getMoveTutorMoves(): number[] {
+    return [];
+  }
+
+  setMoveTutorMoves(_moves: number[]): void {}
+
+  getMoveTutorCompatibility(): Map<Pokemon, boolean[]> {
+    return new Map();
+  }
+
+  setMoveTutorCompatibility(_compatData: Map<Pokemon, boolean[]>): void {}
+
+  // === SIMPLE METADATA METHODS ===
+
+  generationOfPokemon(): number {
+    return 1;
+  }
+
+  getDefaultExtension(): string {
+    return 'gbc';
+  }
+
+  isYellow(): boolean {
+    return this.romEntry.isYellow;
+  }
+
+  starterCount(): number {
+    return this.isYellow() ? 2 : 3;
+  }
+
+  canChangeStaticPokemon(): boolean {
+    return romEntryGetValue(this.romEntry, 'StaticPokemonSupport') > 0;
+  }
+
+  hasPhysicalSpecialSplit(): boolean {
+    return false;
+  }
+
+  supportsFourStartingMoves(): boolean {
+    return true;
+  }
+
+  supportsStarterHeldItems(): boolean {
+    return false;
+  }
+
+  getStarterHeldItems(): number[] {
+    return [];
+  }
+
+  setStarterHeldItems(_items: number[]): void {}
+
+  getGameBreakingMoves(): number[] {
+    if (this.xAccNerfed) {
+      return Gen1Constants.bannedMovesWithXAccBanned;
+    } else {
+      return Gen1Constants.bannedMovesWithoutXAccBanned;
+    }
+  }
+
+  getFieldMoves(): number[] {
+    return Gen1Constants.fieldMoves;
+  }
+
+  getEarlyRequiredHMMoves(): number[] {
+    return Gen1Constants.earlyRequiredHMs;
+  }
+
+  getMovesBannedFromLevelup(): number[] {
+    return Gen1Constants.bannedLevelupMoves;
+  }
+
+  getDoublesTrainerClasses(): number[] {
+    return [];
+  }
+
+  fixedTrainerClassNamesLength(): boolean {
+    return true;
+  }
+
+  canChangeTrainerText(): boolean {
+    return romEntryGetValue(this.romEntry, 'CanChangeTrainerText') > 0;
+  }
+
+  hasDVs(): boolean {
+    return true;
+  }
+
+  getHMCount(): number {
+    return Gen1Constants.hmCount;
+  }
+
+  getTMCount(): number {
+    return Gen1Constants.tmCount;
+  }
+
+  typeInGame(type: Type): boolean {
+    if (
+      !isHackOnly(type) &&
+      type !== Type.DARK &&
+      type !== Type.STEEL &&
+      type !== Type.FAIRY
+    ) {
+      return true;
+    }
+    const typeName = Type[type];
+    return this.romEntry.extraTypeReverse.has(typeName);
+  }
+
+  getUpdatedPokemonStats(generation: number): Map<number, StatChange> {
+    const map = GlobalConstants.getStatChanges(generation);
+    switch (generation) {
+      case 6:
+        map.set(Species.butterfree, new StatChange(Stat.SPECIAL, 90));
+        map.set(Species.clefable, new StatChange(Stat.SPECIAL, 95));
+        map.set(Species.vileplume, new StatChange(Stat.SPECIAL, 110));
+        break;
+      default:
+        break;
+    }
+    return map;
+  }
+
+  isEffectivenessUpdated(): boolean {
+    return this.effectivenessUpdated;
+  }
+
+  internalStringLength(s: string): number {
+    return this.translateString(s).length;
+  }
+
+  hasShopRandomization(): boolean {
+    return false;
+  }
+
+  setShopPrices(): void {}
+
+  miscTweaksAvailable(): number {
+    let available = MiscTweak.LOWER_CASE_POKEMON_NAMES.getValue();
+    available |= MiscTweak.UPDATE_TYPE_EFFECTIVENESS.getValue();
+    if (this.romEntry.tweakFiles.get('BWXPTweak') != null) {
+      available |= MiscTweak.BW_EXP_PATCH.getValue();
+    }
+    if (this.romEntry.tweakFiles.get('XAccNerfTweak') != null) {
+      available |= MiscTweak.NERF_X_ACCURACY.getValue();
+    }
+    if (this.romEntry.tweakFiles.get('CritRateTweak') != null) {
+      available |= MiscTweak.FIX_CRIT_RATE.getValue();
+    }
+    if (romEntryGetValue(this.romEntry, 'TextDelayFunctionOffset') !== 0) {
+      available |= MiscTweak.FASTEST_TEXT.getValue();
+    }
+    if (romEntryGetValue(this.romEntry, 'PCPotionOffset') !== 0) {
+      available |= MiscTweak.RANDOMIZE_PC_POTION.getValue();
+    }
+    if (romEntryGetValue(this.romEntry, 'PikachuEvoJumpOffset') !== 0) {
+      available |= MiscTweak.ALLOW_PIKACHU_EVOLUTION.getValue();
+    }
+    if (
+      romEntryGetValue(this.romEntry, 'CatchingTutorialMonOffset') !== 0
+    ) {
+      available |= MiscTweak.RANDOMIZE_CATCHING_TUTORIAL.getValue();
+    }
+    return available;
+  }
+
+  applyMiscTweak(_tweak: { value: number }): void {
+    // Stub: full implementation requires IPS patching and ROM manipulation
+  }
+
+  getROMName(): string {
+    return 'Pokemon ' + this.romEntry.name;
+  }
+
+  getROMCode(): string {
+    return (
+      this.romEntry.romName +
+      ' (' +
+      this.romEntry.version +
+      '/' +
+      this.romEntry.nonJapanese +
+      ')'
+    );
+  }
+
+  getSupportLevel(): string {
+    return romEntryGetValue(this.romEntry, 'StaticPokemonSupport') > 0
+      ? 'Complete'
+      : 'No Static Pokemon';
+  }
+
+  trainerNameMode(): TrainerNameMode {
+    return TrainerNameMode.SAME_LENGTH;
+  }
+
+  isRomValid(): boolean {
+    return this.romEntry.expectedCRC32 === this.actualCRC32;
+  }
+
+  // === STUB IMPLEMENTATIONS (complex methods for later steps) ===
+
+  getPokemon(): (Pokemon | null)[] {
+    return this.pokemonList;
+  }
+
+  getMoves(): (Move | null)[] {
+    return this.movesList;
+  }
+
+  getStarters(): Pokemon[] {
+    return [];
+  }
+
+  setStarters(_newStarters: Pokemon[]): boolean {
+    return false;
+  }
+
+  customStarters(_settings: Settings): void {}
+
+  randomizeStarters(_settings: Settings): void {}
+
+  randomizeBasicTwoEvosStarters(_settings: Settings): void {}
+
+  randomizeStarterHeldItems(_settings: Settings): void {}
+
+  getEvolutionItems(): number[] {
+    return [];
+  }
+
+  standardizeEXPCurves(_settings: Settings): void {}
+
+  getEncounters(_useTimeOfDay: boolean): EncounterSet[] {
+    return [];
+  }
+
+  setEncounters(
+    _useTimeOfDay: boolean,
+    _encounters: EncounterSet[]
+  ): void {}
+
+  randomEncounters(_settings: Settings): void {}
+
+  area1to1Encounters(_settings: Settings): void {}
+
+  game1to1Encounters(_settings: Settings): void {}
+
+  randomizeWildHeldItems(_settings: Settings): void {}
+
+  changeCatchRates(_settings: Settings): void {}
+
+  minimumCatchRate(
+    _rateNonLegendary: number,
+    _rateLegendary: number
+  ): void {}
+
+  enableGuaranteedPokemonCatching(): void {}
+
+  getTrainers(): Trainer[] {
+    return [];
+  }
+
+  setTrainers(
+    _trainerData: Trainer[],
+    _doubleBattleMode: boolean
+  ): void {}
+
+  randomizeTrainerPokes(_settings: Settings): void {}
+
+  randomizeTrainerHeldItems(_settings: Settings): void {}
+
+  rivalCarriesStarter(): void {}
+
+  forceFullyEvolvedTrainerPokes(_settings: Settings): void {}
+
+  onlyChangeTrainerLevels(_settings: Settings): void {}
+
+  addTrainerPokemon(_settings: Settings): void {}
+
+  doubleBattleMode(): void {}
+
+  getMoveSelectionPoolAtLevel(
+    _tp: TrainerPokemon,
+    _cyclicEvolutions: boolean
+  ): Move[] {
+    return [];
+  }
+
+  pickTrainerMovesets(_settings: Settings): void {}
+
+  updateMoves(_settings: Settings): void {}
+
+  initMoveUpdates(): void {}
+
+  getMoveUpdates(): Map<number, boolean[]> {
+    return new Map();
+  }
+
+  getMovesLearnt(): Map<number, MoveLearnt[]> {
+    return new Map();
+  }
+
+  setMovesLearnt(_movesets: Map<number, MoveLearnt[]>): void {}
+
+  randomizeMovesLearnt(_settings: Settings): void {}
+
+  randomizeEggMoves(_settings: Settings): void {}
+
+  orderDamagingMovesByDamage(): void {}
+
+  metronomeOnlyMode(): void {}
+
+  getStaticPokemon(): StaticEncounter[] {
+    // Static Pokemon support requires staticPokemon entries in the ROM entry config.
+    // For now, return empty since those aren't parsed from INI yet.
+    // When staticPokemon entries are available, each has speciesOffsets and levelOffsets.
+    return [];
+  }
+
+  setStaticPokemon(_staticPokemon: StaticEncounter[]): boolean {
+    // See getStaticPokemon() — requires staticPokemon config entries.
+    return false;
+  }
+
+  randomizeStaticPokemon(_settings: Settings): void {}
+
+  onlyChangeStaticLevels(_settings: Settings): void {}
+
+  applyCorrectStaticMusic(
+    _specialMusicStaticChanges: Map<number, number>
+  ): void {}
+
+  hasStaticMusicFix(): boolean {
+    return false;
+  }
+
+  randomizeTotemPokemon(_settings: Settings): void {}
+
+  getTMMoves(): number[] {
+    return [];
+  }
+
+  getHMMoves(): number[] {
+    return [];
+  }
+
+  setTMMoves(_moveIndexes: number[]): void {}
+
+  randomizeTMMoves(_settings: Settings): void {}
+
+  getTMHMCompatibility(): Map<Pokemon, boolean[]> {
+    return new Map();
+  }
+
+  setTMHMCompatibility(_compatData: Map<Pokemon, boolean[]>): void {}
+
+  randomizeTMHMCompatibility(_settings: Settings): void {}
+
+  fullTMHMCompatibility(): void {}
+
+  ensureTMCompatSanity(): void {}
+
+  ensureTMEvolutionSanity(): void {}
+
+  fullHMCompatibility(): void {}
+
+  copyTMCompatibilityToCosmeticFormes(): void {}
+
+  randomizeMoveTutorMoves(_settings: Settings): void {}
+
+  randomizeMoveTutorCompatibility(_settings: Settings): void {}
+
+  fullMoveTutorCompatibility(): void {}
+
+  ensureMoveTutorCompatSanity(): void {}
+
+  ensureMoveTutorEvolutionSanity(): void {}
+
+  copyMoveTutorCompatibilityToCosmeticFormes(): void {}
+
+  getTrainerNames(): string[] {
+    const offsets = this.romEntry.arrayEntries.get('TrainerClassNamesOffsets');
+    if (!offsets || offsets.length === 0) return [];
+    const trainerNames: string[] = [];
+    let offset = offsets[offsets.length - 1];
+    for (let j = 0; j < Gen1Constants.tclassesCounts[1]; j++) {
+      const name = this.readVariableLengthString(offset, false);
+      offset += this.lengthOfStringAt(offset, false) + 1;
+      if (Gen1Constants.singularTrainers.includes(j)) {
+        trainerNames.push(name);
+      }
+    }
+    return trainerNames;
+  }
+
+  setTrainerNames(trainerNames: string[]): void {
+    if (romEntryGetValue(this.romEntry, 'CanChangeTrainerText') <= 0) return;
+    const offsets = this.romEntry.arrayEntries.get('TrainerClassNamesOffsets');
+    if (!offsets || offsets.length === 0) return;
+    let nameIdx = 0;
+    let offset = offsets[offsets.length - 1];
+    for (let j = 0; j < Gen1Constants.tclassesCounts[1]; j++) {
+      const oldLength = this.lengthOfStringAt(offset, false) + 1;
+      if (Gen1Constants.singularTrainers.includes(j)) {
+        const newName = trainerNames[nameIdx++];
+        this.writeFixedLengthString(newName, offset, oldLength);
+      }
+      offset += oldLength;
+    }
+  }
+
+  getTCNameLengthsByTrainer(): number[] {
+    return [];
+  }
+
+  randomizeTrainerNames(_settings: Settings): void {}
+
+  getTrainerClassNames(): string[] {
+    const offsets = this.romEntry.arrayEntries.get('TrainerClassNamesOffsets');
+    if (!offsets || offsets.length === 0) return [];
+    const trainerClassNames: string[] = [];
+    if (offsets.length === 2) {
+      for (let i = 0; i < offsets.length; i++) {
+        let offset = offsets[i];
+        for (let j = 0; j < Gen1Constants.tclassesCounts[i]; j++) {
+          const name = this.readVariableLengthString(offset, false);
+          offset += this.lengthOfStringAt(offset, false) + 1;
+          if (i === 0 || !Gen1Constants.singularTrainers.includes(j)) {
+            trainerClassNames.push(name);
+          }
+        }
+      }
+    } else {
+      let offset = offsets[0];
+      for (let j = 0; j < Gen1Constants.tclassesCounts[1]; j++) {
+        const name = this.readVariableLengthString(offset, false);
+        offset += this.lengthOfStringAt(offset, false) + 1;
+        if (!Gen1Constants.singularTrainers.includes(j)) {
+          trainerClassNames.push(name);
+        }
+      }
+    }
+    return trainerClassNames;
+  }
+
+  setTrainerClassNames(trainerClassNames: string[]): void {
+    if (romEntryGetValue(this.romEntry, 'CanChangeTrainerText') <= 0) return;
+    const offsets = this.romEntry.arrayEntries.get('TrainerClassNamesOffsets');
+    if (!offsets || offsets.length === 0) return;
+    let nameIdx = 0;
+    if (offsets.length === 2) {
+      for (let i = 0; i < offsets.length; i++) {
+        let offset = offsets[i];
+        for (let j = 0; j < Gen1Constants.tclassesCounts[i]; j++) {
+          const oldLength = this.lengthOfStringAt(offset, false) + 1;
+          if (i === 0 || !Gen1Constants.singularTrainers.includes(j)) {
+            const newName = trainerClassNames[nameIdx++];
+            this.writeFixedLengthString(newName, offset, oldLength);
+          }
+          offset += oldLength;
+        }
+      }
+    } else {
+      let offset = offsets[0];
+      for (let j = 0; j < Gen1Constants.tclassesCounts[1]; j++) {
+        const oldLength = this.lengthOfStringAt(offset, false) + 1;
+        if (!Gen1Constants.singularTrainers.includes(j)) {
+          const newName = trainerClassNames[nameIdx++];
+          this.writeFixedLengthString(newName, offset, oldLength);
+        }
+        offset += oldLength;
+      }
+    }
+  }
+
+  randomizeTrainerClassNames(_settings: Settings): void {}
+
+  getAllowedItems(): ItemList {
+    return new ItemList(0);
+  }
+
+  getNonBadItems(): ItemList {
+    return new ItemList(0);
+  }
+
+  getUniqueNoSellItems(): number[] {
+    return [];
+  }
+
+  getRegularShopItems(): number[] {
+    return [];
+  }
+
+  getOPShopItems(): number[] {
+    return [];
+  }
+
+  getItemNames(): string[] {
+    return this.itemNames;
+  }
+
+  getRequiredFieldTMs(): number[] {
+    return Gen1Constants.requiredFieldTMs;
+  }
+
+  getCurrentFieldTMs(): number[] {
+    const itemOffsets = this.getItemOffsets();
+    const fieldTMs: number[] = [];
+    for (const offset of itemOffsets) {
+      const itemHere = this.rom[offset] & 0xFF;
+      if (itemHere >= Gen1Constants.tmsStartIndex && itemHere < Gen1Constants.tmsStartIndex + Gen1Constants.tmCount) {
+        fieldTMs.push(itemHere - Gen1Constants.tmsStartIndex + 1);
+      }
+    }
+    return fieldTMs;
+  }
+
+  setFieldTMs(fieldTMs: number[]): void {
+    const itemOffsets = this.getItemOffsets();
+    let tmIdx = 0;
+    for (const offset of itemOffsets) {
+      const itemHere = this.rom[offset] & 0xFF;
+      if (itemHere >= Gen1Constants.tmsStartIndex && itemHere < Gen1Constants.tmsStartIndex + Gen1Constants.tmCount) {
+        this.rom[offset] = (fieldTMs[tmIdx++] + Gen1Constants.tmsStartIndex - 1) & 0xFF;
+      }
+    }
+  }
+
+  getRegularFieldItems(): number[] {
+    const itemOffsets = this.getItemOffsets();
+    const fieldItems: number[] = [];
+    for (const offset of itemOffsets) {
+      const itemHere = this.rom[offset] & 0xFF;
+      const isTM = itemHere >= Gen1Constants.tmsStartIndex && itemHere < Gen1Constants.tmsStartIndex + Gen1Constants.tmCount;
+      // In a full implementation, would use allowedItems.isAllowed(); for now accept all non-zero non-TM items
+      if (itemHere > 0 && !isTM) {
+        fieldItems.push(itemHere);
+      }
+    }
+    return fieldItems;
+  }
+
+  setRegularFieldItems(items: number[]): void {
+    const itemOffsets = this.getItemOffsets();
+    let itemIdx = 0;
+    for (const offset of itemOffsets) {
+      const itemHere = this.rom[offset] & 0xFF;
+      const isTM = itemHere >= Gen1Constants.tmsStartIndex && itemHere < Gen1Constants.tmsStartIndex + Gen1Constants.tmCount;
+      if (itemHere > 0 && !isTM) {
+        this.rom[offset] = items[itemIdx++] & 0xFF;
+      }
+    }
+  }
+
+  /**
+   * Get all item offsets from preloaded map data.
+   * This is a simplified stub; the full implementation requires map preloading.
+   */
+  private getItemOffsets(): number[] {
+    // In the full implementation, this would collect item offsets from
+    // preloaded SubMap data and hidden item tables.
+    // For now return empty; will be populated when map preloading is implemented.
+    return [];
+  }
+
+  shuffleFieldItems(): void {}
+
+  randomizeFieldItems(_settings: Settings): void {}
+
+  shuffleShopItems(): void {}
+
+  randomizeShopItems(_settings: Settings): void {}
+
+  getShopItems(): Map<number, Shop> {
+    return new Map();
+  }
+
+  setShopItems(_shopItems: Map<number, Shop>): void {}
+
+  randomizePickupItems(_settings: Settings): void {}
+
+  getIngameTrades(): IngameTrade[] {
+    const trades: IngameTrade[] = [];
+    const tableOffset = romEntryGetValue(this.romEntry, 'TradeTableOffset');
+    const tableSize = romEntryGetValue(this.romEntry, 'TradeTableSize');
+    const nicknameLength = romEntryGetValue(this.romEntry, 'TradeNameLength');
+    if (tableSize === 0) return trades;
+
+    const unused = this.romEntry.arrayEntries.get('TradesUnused') ?? [];
+    let unusedOffset = 0;
+    const entryLength = nicknameLength + 3;
+
+    for (let entry = 0; entry < tableSize; entry++) {
+      if (unusedOffset < unused.length && unused[unusedOffset] === entry) {
+        unusedOffset++;
+        continue;
+      }
+      const trade = new IngameTrade();
+      const entryOffset = tableOffset + entry * entryLength;
+      const reqId = this.pokeRBYToNumTable[this.rom[entryOffset] & 0xFF];
+      const givId = this.pokeRBYToNumTable[this.rom[entryOffset + 1] & 0xFF];
+      trade.requestedPokemon = this.pokes[reqId]!;
+      trade.givenPokemon = this.pokes[givId]!;
+      trade.nickname = this.readString(entryOffset + 3, nicknameLength, false);
+      trades.push(trade);
+    }
+    return trades;
+  }
+
+  setIngameTrades(trades: IngameTrade[]): void {
+    const tableOffset = romEntryGetValue(this.romEntry, 'TradeTableOffset');
+    const tableSize = romEntryGetValue(this.romEntry, 'TradeTableSize');
+    const nicknameLength = romEntryGetValue(this.romEntry, 'TradeNameLength');
+    if (tableSize === 0) return;
+
+    const unused = this.romEntry.arrayEntries.get('TradesUnused') ?? [];
+    let unusedOffset = 0;
+    const entryLength = nicknameLength + 3;
+    let tradeOffset = 0;
+
+    for (let entry = 0; entry < tableSize; entry++) {
+      if (unusedOffset < unused.length && unused[unusedOffset] === entry) {
+        unusedOffset++;
+        continue;
+      }
+      const trade = trades[tradeOffset++];
+      const entryOffset = tableOffset + entry * entryLength;
+      this.rom[entryOffset] = this.pokeNumToRBYTable[trade.requestedPokemon.number] & 0xFF;
+      this.rom[entryOffset + 1] = this.pokeNumToRBYTable[trade.givenPokemon.number] & 0xFF;
+      if (romEntryGetValue(this.romEntry, 'CanChangeTrainerText') > 0) {
+        this.writeFixedLengthString(trade.nickname, entryOffset + 3, nicknameLength);
+      }
+    }
+  }
+
+  randomizeIngameTrades(_settings: Settings): void {}
+
+  removeImpossibleEvolutions(_settings: Settings): void {}
+
+  condenseLevelEvolutions(
+    _maxLevel: number,
+    _maxIntermediateLevel: number
+  ): void {}
+
+  makeEvolutionsEasier(_settings: Settings): void {}
+
+  removeTimeBasedEvolutions(): void {}
+
+  getImpossibleEvoUpdates(): Set<EvolutionUpdate> {
+    return new Set();
+  }
+
+  getEasierEvoUpdates(): Set<EvolutionUpdate> {
+    return new Set();
+  }
+
+  getTimeBasedEvoUpdates(): Set<EvolutionUpdate> {
+    return new Set();
+  }
+
+  randomizeEvolutions(_settings: Settings): void {}
+
+  randomizeEvolutionsEveryLevel(_settings: Settings): void {}
+
+  randomizeIntroPokemon(): void {
+    const introPokemon = this.pokeNumToRBYTable[this.randomPokemon().number];
+    this.rom[romEntryGetValue(this.romEntry, 'IntroPokemonOffset')] = introPokemon & 0xFF;
+    this.rom[romEntryGetValue(this.romEntry, 'IntroCryOffset')] = introPokemon & 0xFF;
+  }
+
+  getMascotImage(): Uint8Array | null {
+    return null;
+  }
+
+  removeEvosForPokemonPool(): void {}
+
+  writeCheckValueToROM(_value: number): void {}
+}
+
+// ---------------------------------------------------------------------------
+// Bitfield helpers (ported from AbstractGBRomHandler)
+// ---------------------------------------------------------------------------
+
+export function readByteIntoFlags(
+  rom: Uint8Array,
+  flags: boolean[],
+  offsetIntoFlags: number,
+  offsetIntoROM: number,
+): void {
+  const thisByte = rom[offsetIntoROM] & 0xFF;
+  for (let i = 0; i < 8 && (i + offsetIntoFlags) < flags.length; i++) {
+    flags[offsetIntoFlags + i] = ((thisByte >> i) & 0x01) === 0x01;
+  }
+}
+
+export function getByteFromFlags(flags: boolean[], offsetIntoFlags: number): number {
+  let thisByte = 0;
+  for (let i = 0; i < 8 && (i + offsetIntoFlags) < flags.length; i++) {
+    thisByte |= (flags[offsetIntoFlags + i] ? 1 : 0) << i;
+  }
+  return thisByte & 0xFF;
+}
+
+// ---------------------------------------------------------------------------
+// Starters (standalone functions)
+// ---------------------------------------------------------------------------
+
+export function getGen1Starters(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+  pokemonList: Pokemon[],
+  pokeRBYToNumTable: number[],
+): Pokemon[] {
+  const starters: Pokemon[] = [];
+  const offsets1 = romEntry.arrayEntries.get('StarterOffsets1')!;
+  const offsets2 = romEntry.arrayEntries.get('StarterOffsets2')!;
+  starters.push(pokemonList[pokeRBYToNumTable[rom[offsets1[0]] & 0xFF]]);
+  starters.push(pokemonList[pokeRBYToNumTable[rom[offsets2[0]] & 0xFF]]);
+  if (!romEntry.isYellow) {
+    const offsets3 = romEntry.arrayEntries.get('StarterOffsets3')!;
+    starters.push(pokemonList[pokeRBYToNumTable[rom[offsets3[0]] & 0xFF]]);
+  }
+  return starters;
+}
+
+export function setGen1Starters(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+  pokemonList: Pokemon[],
+  pokeNumToRBYTable: number[],
+  starters: Pokemon[],
+  textTables?: TextTables,
+): boolean {
+  const starterAmount = romEntry.isYellow ? 2 : 3;
+  if (starters.length !== starterAmount) {
+    return false;
+  }
+
+  for (let i = 0; i < starterAmount; i++) {
+    const starter = pokeNumToRBYTable[starters[i].number] & 0xFF;
+    const offsets = romEntry.arrayEntries.get('StarterOffsets' + (i + 1))!;
+    for (const offset of offsets) {
+      rom[offset] = starter;
+    }
+  }
+
+  if (!romEntry.isYellow) {
+    if (romEntryGetValue(romEntry, 'CanChangeStarterText') > 0 && textTables) {
+      const starterTextOffsets = romEntry.arrayEntries.get('StarterTextOffsets');
+      if (starterTextOffsets) {
+        for (let i = 0; i < 3 && i < starterTextOffsets.length; i++) {
+          const text = `So! You want\\n${starters[i].name}?\\e`;
+          const translated = translateString(text, textTables);
+          translated.forEach((b, j) => { rom[starterTextOffsets[i] + j] = b; });
+        }
+      }
+    }
+
+    if (romEntryGetValue(romEntry, 'PatchPokedex') > 0) {
+      const onValues = new Map<number, number>();
+      for (let i = 0; i < 3; i++) {
+        const pkDexNum = starters[i].number;
+        const ramOffset = Math.floor((pkDexNum - 1) / 8) + romEntryGetValue(romEntry, 'PokedexRamOffset');
+        const bitShift = (pkDexNum - 1) % 8;
+        const writeValue = 1 << bitShift;
+        if (onValues.has(ramOffset)) {
+          onValues.set(ramOffset, onValues.get(ramOffset)! | writeValue);
+        } else {
+          onValues.set(ramOffset, writeValue);
+        }
+      }
+
+      const pkDexOnOffset = romEntryGetValue(romEntry, 'StarterPokedexOnOffset');
+      const pkDexOffOffset = romEntryGetValue(romEntry, 'StarterPokedexOffOffset');
+      const sizeForOnRoutine = 5 * onValues.size + 3;
+      const writeOnRoutineTo = romEntryGetValue(romEntry, 'StarterPokedexBranchOffset');
+      const writeOffRoutineTo = writeOnRoutineTo + sizeForOnRoutine;
+      const offsetForOnRoutine = makeGBPointer(writeOnRoutineTo);
+      const offsetForOffRoutine = makeGBPointer(writeOffRoutineTo);
+      const retOnOffset = makeGBPointer(pkDexOnOffset + 5);
+      const retOffOffset = makeGBPointer(pkDexOffOffset + 4);
+
+      rom[pkDexOnOffset] = GBConstants.gbZ80Jump;
+      writeWord(rom, pkDexOnOffset + 1, offsetForOnRoutine);
+      rom[pkDexOnOffset + 3] = GBConstants.gbZ80Nop;
+      rom[pkDexOnOffset + 4] = GBConstants.gbZ80Nop;
+
+      rom[pkDexOffOffset] = GBConstants.gbZ80Jump;
+      writeWord(rom, pkDexOffOffset + 1, offsetForOffRoutine);
+      rom[pkDexOffOffset + 3] = GBConstants.gbZ80Nop;
+
+      rom[writeOffRoutineTo] = GBConstants.gbZ80XorA;
+      let turnOnOffset = writeOnRoutineTo;
+      let turnOffOffset = writeOffRoutineTo + 1;
+      const sortedKeys = [...onValues.keys()].sort((a, b) => a - b);
+      for (const ramOffset of sortedKeys) {
+        const onValue = onValues.get(ramOffset)!;
+        rom[turnOnOffset++] = GBConstants.gbZ80LdA;
+        rom[turnOnOffset++] = onValue & 0xFF;
+        rom[turnOnOffset++] = GBConstants.gbZ80LdAToFar;
+        rom[turnOnOffset++] = ramOffset % 0x100;
+        rom[turnOnOffset++] = Math.floor(ramOffset / 0x100);
+        rom[turnOffOffset++] = GBConstants.gbZ80LdAToFar;
+        rom[turnOffOffset++] = ramOffset % 0x100;
+        rom[turnOffOffset++] = Math.floor(ramOffset / 0x100);
+      }
+      rom[turnOnOffset++] = GBConstants.gbZ80Jump;
+      writeWord(rom, turnOnOffset, retOnOffset);
+      rom[turnOffOffset++] = GBConstants.gbZ80Jump;
+      writeWord(rom, turnOffOffset, retOffOffset);
+    }
+  }
+
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Moveset loading (standalone function)
+// ---------------------------------------------------------------------------
+
+export function getGen1MovesLearnt(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+  pokemonList: Pokemon[],
+  pokeRBYToNumTable: number[],
+  moveRomToNumTable: number[],
+): Map<number, MoveLearnt[]> {
+  const movesets = new Map<number, MoveLearnt[]>();
+  const pointersOffset = romEntryGetValue(romEntry, 'PokemonMovesetsTableOffset');
+  const pokeStatsOffset = romEntryGetValue(romEntry, 'PokemonStatsOffset');
+  const pkmnCount = romEntryGetValue(romEntry, 'InternalPokemonCount');
+
+  for (let i = 1; i <= pkmnCount; i++) {
+    const pointer = readWord(rom, pointersOffset + (i - 1) * 2);
+    let realPointer = calculateOffset(bankOf(pointersOffset), pointer);
+    if (pokeRBYToNumTable[i] !== 0) {
+      const pokeNum = pokeRBYToNumTable[i];
+      let statsOffset: number;
+      if (pokeNum === Species.mew && !romEntry.isYellow) {
+        statsOffset = romEntryGetValue(romEntry, 'MewStatsOffset');
+      } else {
+        statsOffset = (pokeNum - 1) * Gen1Constants.baseStatsEntrySize + pokeStatsOffset;
+      }
+
+      const ourMoves: MoveLearnt[] = [];
+      for (let delta = Gen1Constants.bsLevel1MovesOffset; delta < Gen1Constants.bsLevel1MovesOffset + 4; delta++) {
+        if (rom[statsOffset + delta] !== 0x00) {
+          const learnt = new MoveLearnt();
+          learnt.level = 1;
+          learnt.move = moveRomToNumTable[rom[statsOffset + delta] & 0xFF];
+          ourMoves.push(learnt);
+        }
+      }
+
+      while (rom[realPointer] !== 0) {
+        if (rom[realPointer] === 1) {
+          realPointer += 3;
+        } else if (rom[realPointer] === 2) {
+          realPointer += 4;
+        } else if (rom[realPointer] === 3) {
+          realPointer += 3;
+        }
+      }
+      realPointer++;
+
+      while (rom[realPointer] !== 0) {
+        const learnt = new MoveLearnt();
+        learnt.level = rom[realPointer] & 0xFF;
+        learnt.move = moveRomToNumTable[rom[realPointer + 1] & 0xFF];
+        ourMoves.push(learnt);
+        realPointer += 2;
+      }
+
+      movesets.set(pokeNum, ourMoves);
+    }
+  }
+
+  return movesets;
+}
+
+// ---------------------------------------------------------------------------
+// writeEvosAndMovesLearnt (standalone function)
+// ---------------------------------------------------------------------------
+
+export function writeGen1EvosAndMovesLearnt(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+  pokemonList: Pokemon[],
+  pokeRBYToNumTable: number[],
+  pokeNumToRBYTable: number[],
+  moveNumToRomTable: number[],
+  movesets: Map<number, MoveLearnt[]> | null,
+  writeEvos: boolean,
+): void {
+  const pokeStatsOffset = romEntryGetValue(romEntry, 'PokemonStatsOffset');
+  const movesEvosStart = romEntryGetValue(romEntry, 'PokemonMovesetsTableOffset');
+  const movesEvosBank = bankOf(movesEvosStart);
+  const pkmnCount = romEntryGetValue(romEntry, 'InternalPokemonCount');
+  const pointerTable = new Uint8Array(pkmnCount * 2);
+  const mainDataBlockSize = romEntryGetValue(romEntry, 'PokemonMovesetsDataSize');
+  const mainDataBlockOffset = movesEvosStart + pointerTable.length;
+  const mainDataBlock = new Uint8Array(mainDataBlockSize);
+  let offsetInMainData = 0;
+
+  const extraSpaceOffset = romEntryGetValue(romEntry, 'PokemonMovesetsExtraSpaceOffset');
+  const extraSpaceBank = bankOf(extraSpaceOffset);
+  let extraSpaceEnabled = false;
+  let extraDataBlock: Uint8Array | null = null;
+  let offsetInExtraData = 0;
+  let extraSpaceSize = 0;
+
+  if (movesEvosBank === extraSpaceBank && extraSpaceOffset !== 0) {
+    extraSpaceEnabled = true;
+    const startOfNextBank = (Math.floor(extraSpaceOffset / GBConstants.bankSize) + 1) * GBConstants.bankSize;
+    extraSpaceSize = startOfNextBank - extraSpaceOffset;
+    extraDataBlock = new Uint8Array(extraSpaceSize);
+  }
+
+  let nullEntryPointer = -1;
+
+  for (let i = 1; i <= pkmnCount; i++) {
+    let writeData: Uint8Array | null = null;
+    const oldDataOffset = calculateOffset(movesEvosBank, readWord(rom, movesEvosStart + (i - 1) * 2));
+    let setNullEntryPointerHere = false;
+
+    if (pokeRBYToNumTable[i] === 0) {
+      if (nullEntryPointer === -1) {
+        writeData = new Uint8Array([0, 0]);
+        setNullEntryPointerHere = true;
+      } else {
+        writeWord(pointerTable, (i - 1) * 2, nullEntryPointer);
+      }
+    } else {
+      const pokeNum = pokeRBYToNumTable[i];
+      const pkmn = pokemonList[pokeNum];
+      const dataBytes: number[] = [];
+
+      if (!writeEvos) {
+        let evoOffset = oldDataOffset;
+        while (rom[evoOffset] !== 0x00) {
+          const method = rom[evoOffset] & 0xFF;
+          const limiter = (method === 2) ? 4 : 3;
+          for (let b = 0; b < limiter; b++) {
+            dataBytes.push(rom[evoOffset++] & 0xFF);
+          }
+        }
+      } else {
+        if (pkmn.evolutionsFrom) {
+          for (const evo of pkmn.evolutionsFrom) {
+            dataBytes.push(evolutionTypeToIndex(evo.type, 1));
+            if (evo.type.toString() === 'LEVEL') {
+              dataBytes.push(evo.extraInfo);
+            } else if (evo.type.toString() === 'STONE') {
+              dataBytes.push(evo.extraInfo);
+              dataBytes.push(1);
+            } else if (evo.type.toString() === 'TRADE') {
+              dataBytes.push(1);
+            }
+            const pokeIndexTo = pokeNumToRBYTable[evo.to.number];
+            dataBytes.push(pokeIndexTo);
+          }
+        }
+      }
+      dataBytes.push(0);
+
+      if (movesets === null) {
+        let movesOffset = oldDataOffset;
+        while (rom[movesOffset] !== 0x00) {
+          const method = rom[movesOffset] & 0xFF;
+          movesOffset += (method === 2) ? 4 : 3;
+        }
+        movesOffset++;
+        while (rom[movesOffset] !== 0x00) {
+          dataBytes.push(rom[movesOffset++] & 0xFF);
+          dataBytes.push(rom[movesOffset++] & 0xFF);
+        }
+      } else {
+        const ourMoves = movesets.get(pkmn.number) || [];
+        let statsOffset: number;
+        if (pokeNum === Species.mew && !romEntry.isYellow) {
+          statsOffset = romEntryGetValue(romEntry, 'MewStatsOffset');
+        } else {
+          statsOffset = (pokeNum - 1) * Gen1Constants.baseStatsEntrySize + pokeStatsOffset;
+        }
+        let movenum = 0;
+        while (movenum < 4 && ourMoves.length > movenum && ourMoves[movenum].level === 1) {
+          rom[statsOffset + Gen1Constants.bsLevel1MovesOffset + movenum] =
+            moveNumToRomTable[ourMoves[movenum].move] & 0xFF;
+          movenum++;
+        }
+        for (let mn = movenum; mn < 4; mn++) {
+          rom[statsOffset + Gen1Constants.bsLevel1MovesOffset + mn] = 0;
+        }
+        while (movenum < ourMoves.length) {
+          dataBytes.push(ourMoves[movenum].level & 0xFF);
+          dataBytes.push(moveNumToRomTable[ourMoves[movenum].move] & 0xFF);
+          movenum++;
+        }
+      }
+      dataBytes.push(0);
+
+      writeData = new Uint8Array(dataBytes);
+    }
+
+    if (writeData !== null) {
+      const lengthToFit = writeData.length;
+      let pointerToWrite = -1;
+
+      if (
+        (offsetInMainData + lengthToFit <= mainDataBlockSize) ||
+        (writeData[0] === 0 && offsetInMainData > 0 && offsetInMainData + lengthToFit === mainDataBlockSize + 1)
+      ) {
+        if (writeData[0] === 0 && offsetInMainData > 0) {
+          const writtenDataOffset = mainDataBlockOffset + offsetInMainData - 1;
+          pointerToWrite = makeGBPointer(writtenDataOffset);
+          mainDataBlock.set(writeData.subarray(1), offsetInMainData);
+          offsetInMainData += lengthToFit - 1;
+        } else {
+          const writtenDataOffset = mainDataBlockOffset + offsetInMainData;
+          pointerToWrite = makeGBPointer(writtenDataOffset);
+          mainDataBlock.set(writeData, offsetInMainData);
+          offsetInMainData += lengthToFit;
+        }
+      } else if (
+        extraSpaceEnabled &&
+        extraDataBlock !== null &&
+        ((offsetInExtraData + lengthToFit <= extraSpaceSize) ||
+          (writeData[0] === 0 && offsetInExtraData > 0 && offsetInExtraData + lengthToFit === extraSpaceSize + 1))
+      ) {
+        if (writeData[0] === 0 && offsetInExtraData > 0) {
+          const writtenDataOffset = extraSpaceOffset + offsetInExtraData - 1;
+          pointerToWrite = makeGBPointer(writtenDataOffset);
+          extraDataBlock.set(writeData.subarray(1), offsetInExtraData);
+          offsetInExtraData += lengthToFit - 1;
+        } else {
+          const writtenDataOffset = extraSpaceOffset + offsetInExtraData;
+          pointerToWrite = makeGBPointer(writtenDataOffset);
+          extraDataBlock.set(writeData, offsetInExtraData);
+          offsetInExtraData += lengthToFit;
+        }
+      } else {
+        throw new Error('Unable to save moves/evolutions, out of space');
+      }
+
+      if (pointerToWrite >= 0) {
+        writeWord(pointerTable, (i - 1) * 2, pointerToWrite);
+        if (setNullEntryPointerHere) {
+          nullEntryPointer = pointerToWrite;
+        }
+      }
+    }
+  }
+
+  rom.set(pointerTable, movesEvosStart);
+  rom.set(mainDataBlock, mainDataBlockOffset);
+  if (extraSpaceEnabled && extraDataBlock !== null) {
+    rom.set(extraDataBlock, extraSpaceOffset);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// TM / HM functions (standalone)
+// ---------------------------------------------------------------------------
+
+export function getGen1TMMoves(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+  moveRomToNumTable: number[],
+): number[] {
+  const tms: number[] = [];
+  const offset = romEntryGetValue(romEntry, 'TMMovesOffset');
+  for (let i = 1; i <= Gen1Constants.tmCount; i++) {
+    tms.push(moveRomToNumTable[rom[offset + (i - 1)] & 0xFF]);
+  }
+  return tms;
+}
+
+export function setGen1TMMoves(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+  moveNumToRomTable: number[],
+  moves: number[],
+): void {
+  const offset = romEntryGetValue(romEntry, 'TMMovesOffset');
+  for (let i = 1; i <= Gen1Constants.tmCount; i++) {
+    rom[offset + (i - 1)] = moveNumToRomTable[moves[i - 1]] & 0xFF;
+  }
+  if (!romEntry.isYellow) {
+    const tms = Gen1Constants.gymLeaderTMs;
+    const glMovesOffset = romEntryGetValue(romEntry, 'GymLeaderMovesTableOffset');
+    for (let i = 0; i < tms.length; i++) {
+      rom[glMovesOffset + i * 2] = moveNumToRomTable[moves[tms[i] - 1]] & 0xFF;
+    }
+  }
+}
+
+export function getGen1HMMoves(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+  moveRomToNumTable: number[],
+): number[] {
+  const hms: number[] = [];
+  const offset = romEntryGetValue(romEntry, 'TMMovesOffset');
+  for (let i = 1; i <= Gen1Constants.hmCount; i++) {
+    hms.push(moveRomToNumTable[rom[offset + Gen1Constants.tmCount + (i - 1)] & 0xFF]);
+  }
+  return hms;
+}
+
+export function getGen1TMHMCompatibility(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+  pokemonList: Pokemon[],
+  pokedexCount: number,
+): Map<Pokemon, boolean[]> {
+  const compat = new Map<Pokemon, boolean[]>();
+  const pokeStatsOffset = romEntryGetValue(romEntry, 'PokemonStatsOffset');
+  for (let i = 1; i <= pokedexCount; i++) {
+    const baseStatsOffset = (romEntry.isYellow || i !== Species.mew)
+      ? (pokeStatsOffset + (i - 1) * Gen1Constants.baseStatsEntrySize)
+      : romEntryGetValue(romEntry, 'MewStatsOffset');
+    const pkmn = pokemonList[i];
+    const flags = new Array<boolean>(Gen1Constants.tmCount + Gen1Constants.hmCount + 1).fill(false);
+    for (let j = 0; j < 7; j++) {
+      readByteIntoFlags(rom, flags, j * 8 + 1, baseStatsOffset + Gen1Constants.bsTMHMCompatOffset + j);
+    }
+    compat.set(pkmn, flags);
+  }
+  return compat;
+}
+
+export function setGen1TMHMCompatibility(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+  pokemonList: Pokemon[],
+  compatData: Map<Pokemon, boolean[]>,
+): void {
+  const pokeStatsOffset = romEntryGetValue(romEntry, 'PokemonStatsOffset');
+  for (const [pkmn, flags] of compatData) {
+    const baseStatsOffset = (romEntry.isYellow || pkmn.number !== Species.mew)
+      ? (pokeStatsOffset + (pkmn.number - 1) * Gen1Constants.baseStatsEntrySize)
+      : romEntryGetValue(romEntry, 'MewStatsOffset');
+    for (let j = 0; j < 7; j++) {
+      rom[baseStatsOffset + Gen1Constants.bsTMHMCompatOffset + j] = getByteFromFlags(flags, j * 8 + 1);
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Factory (ROM detection without loading)
 // ---------------------------------------------------------------------------
 
 export class Gen1Factory {
-  /**
-   * Determines whether the given ROM data could be a Gen 1 ROM.
-   */
   static isLoadable(data: Uint8Array, romEntries: RomEntry[]): boolean {
     if (data.length > 8 * 1024 * 1024) {
       return false;
@@ -649,8 +2012,1082 @@ export class Gen1Factory {
     if (data.length === 0) {
       return false;
     }
-    // We only need 0x1000 bytes for detection, but use whatever we have
-    const partial = data.length > 0x1000 ? data.subarray(0, 0x1000) : data;
+    const partial =
+      data.length > 0x1000 ? data.subarray(0, 0x1000) : data;
     return detectRomInner(partial, data.length, romEntries);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Standalone helpers (kept for backward compatibility)
+// ---------------------------------------------------------------------------
+
+export function readFixedLengthString(
+  rom: Uint8Array,
+  offset: number,
+  length: number,
+  tables: TextTables,
+): string {
+  return readStringFromRom(rom, offset, length, false, tables);
+}
+
+export function writeFixedLengthString(
+  rom: Uint8Array,
+  str: string,
+  offset: number,
+  length: number,
+  tables: TextTables,
+): void {
+  const translated = translateString(str, tables);
+  const len = Math.min(translated.length, length);
+  rom.set(translated.subarray(0, len), offset);
+  for (let i = len; i < length; i++) {
+    rom[offset + i] = GBConstants.stringTerminator;
+  }
+}
+
+export function readVariableLengthString(
+  rom: Uint8Array,
+  offset: number,
+  textEngineMode: boolean,
+  tables: TextTables,
+): string {
+  return readStringFromRom(rom, offset, 0x7fffffff, textEngineMode, tables);
+}
+
+// ---------------------------------------------------------------------------
+// Pokedex order: maps between internal RBY order and national dex order
+// ---------------------------------------------------------------------------
+
+export interface PokedexMapping {
+  pokeNumToRBY: number[];
+  pokeRBYToNum: number[];
+  pokedexCount: number;
+}
+
+export function loadPokedexOrder(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+): PokedexMapping {
+  const pkmnCount = romEntryGetValue(romEntry, 'InternalPokemonCount');
+  const orderOffset = romEntryGetValue(romEntry, 'PokedexOrder');
+  const pokeNumToRBY = new Array<number>(256).fill(0);
+  const pokeRBYToNum = new Array<number>(256).fill(0);
+  let pokedexCount = 0;
+
+  for (let i = 1; i <= pkmnCount; i++) {
+    const pokedexNum = rom[orderOffset + i - 1] & 0xff;
+    pokeRBYToNum[i] = pokedexNum;
+    if (pokedexNum !== 0 && pokeNumToRBY[pokedexNum] === 0) {
+      pokeNumToRBY[pokedexNum] = i;
+    }
+    pokedexCount = Math.max(pokedexCount, pokedexNum);
+  }
+
+  return { pokeNumToRBY, pokeRBYToNum, pokedexCount };
+}
+
+// ---------------------------------------------------------------------------
+// Bulk Pokemon name reading
+// ---------------------------------------------------------------------------
+
+export function readPokemonNames(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+  tables: TextTables,
+): string[] {
+  const offs = romEntryGetValue(romEntry, 'PokemonNamesOffset');
+  const nameLength = romEntryGetValue(romEntry, 'PokemonNamesLength');
+  const pkmnCount = romEntryGetValue(romEntry, 'InternalPokemonCount');
+  const names: string[] = new Array(pkmnCount + 1).fill('');
+  for (let i = 1; i <= pkmnCount; i++) {
+    names[i] = readFixedLengthString(
+      rom,
+      offs + (i - 1) * nameLength,
+      nameLength,
+      tables,
+    );
+  }
+  return names;
+}
+
+// ---------------------------------------------------------------------------
+// Bulk move name reading
+// ---------------------------------------------------------------------------
+
+export function readMoveNames(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+  tables: TextTables,
+): string[] {
+  const moveCount = romEntryGetValue(romEntry, 'MoveCount');
+  let offset = romEntryGetValue(romEntry, 'MoveNamesOffset');
+  const moveNames: string[] = new Array(moveCount + 1).fill('');
+  for (let i = 1; i <= moveCount; i++) {
+    moveNames[i] = readVariableLengthString(rom, offset, false, tables);
+    offset += lengthOfStringAt(rom, offset, false) + 1;
+  }
+  return moveNames;
+}
+
+// ---------------------------------------------------------------------------
+// Bulk Pokemon stats loading / saving
+// ---------------------------------------------------------------------------
+
+export function loadAllPokemonStats(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+  dexMapping: PokedexMapping,
+  tables: TextTables,
+): Pokemon[] {
+  const { pokeNumToRBY, pokedexCount } = dexMapping;
+  const pokes: (Pokemon | null)[] = new Array(pokedexCount + 1).fill(null);
+
+  const pokeNames = readPokemonNames(rom, romEntry, tables);
+
+  const pokeStatsOffset = romEntryGetValue(romEntry, 'PokemonStatsOffset');
+  for (let i = 1; i <= pokedexCount; i++) {
+    pokes[i] = new Pokemon();
+    pokes[i]!.number = i;
+    if (i !== Species.mew || romEntry.isYellow) {
+      loadBasicPokeStats(
+        pokes[i]!,
+        rom,
+        pokeStatsOffset + (i - 1) * Gen1Constants.baseStatsEntrySize,
+        romEntry,
+      );
+    }
+    pokes[i]!.name = pokeNames[pokeNumToRBY[i]] || '';
+  }
+
+  // Mew override for R/B (only if Mew exists in this ROM)
+  if (!romEntry.isYellow && Species.mew <= pokedexCount && pokes[Species.mew] != null) {
+    loadBasicPokeStats(
+      pokes[Species.mew]!,
+      rom,
+      romEntryGetValue(romEntry, 'MewStatsOffset'),
+      romEntry,
+    );
+  }
+
+  return pokes as Pokemon[];
+}
+
+export function saveAllPokemonStats(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+  pokes: Pokemon[],
+  dexMapping: PokedexMapping,
+  tables: TextTables,
+): void {
+  const { pokeNumToRBY, pokedexCount } = dexMapping;
+
+  const offs = romEntryGetValue(romEntry, 'PokemonNamesOffset');
+  const nameLength = romEntryGetValue(romEntry, 'PokemonNamesLength');
+  for (let i = 1; i <= pokedexCount; i++) {
+    const rbynum = pokeNumToRBY[i];
+    const stringOffset = offs + (rbynum - 1) * nameLength;
+    writeFixedLengthString(rom, pokes[i].name, stringOffset, nameLength, tables);
+  }
+
+  const pokeStatsOffset = romEntryGetValue(romEntry, 'PokemonStatsOffset');
+  for (let i = 1; i <= pokedexCount; i++) {
+    if (i === Species.mew) {
+      continue;
+    }
+    saveBasicPokeStats(
+      pokes[i],
+      rom,
+      pokeStatsOffset + (i - 1) * Gen1Constants.baseStatsEntrySize,
+      romEntry,
+    );
+  }
+
+  // Write MEW (only if it exists in this ROM)
+  if (Species.mew <= pokedexCount && pokes[Species.mew] != null) {
+    const mewOffset = romEntry.isYellow
+      ? pokeStatsOffset + (Species.mew - 1) * Gen1Constants.baseStatsEntrySize
+      : romEntryGetValue(romEntry, 'MewStatsOffset');
+    saveBasicPokeStats(pokes[Species.mew], rom, mewOffset, romEntry);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Bulk move loading / saving
+// ---------------------------------------------------------------------------
+
+export interface MoveLoadResult {
+  moves: (Move | null)[];
+  moveNumToRomTable: number[];
+  moveRomToNumTable: number[];
+}
+
+export function loadAllMoves(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+  tables: TextTables,
+): MoveLoadResult {
+  const moveNames = readMoveNames(rom, romEntry, tables);
+  const moveCount = romEntryGetValue(romEntry, 'MoveCount');
+  const movesOffset = romEntryGetValue(romEntry, 'MoveDataOffset');
+
+  const moveNumToRomTable = new Array<number>(256).fill(0);
+  const moveRomToNumTable = new Array<number>(256).fill(0);
+
+  let trueMoveCount = 0;
+  for (let i = 1; i <= moveCount; i++) {
+    if (
+      (rom[movesOffset + (i - 1) * 6] & 0xff) !== 0 &&
+      moveNames[i] !== 'Nothing'
+    ) {
+      trueMoveCount++;
+    }
+  }
+
+  const moves: (Move | null)[] = new Array(trueMoveCount + 1).fill(null);
+  let trueMoveIndex = 0;
+
+  for (let i = 1; i <= moveCount; i++) {
+    const anim = rom[movesOffset + (i - 1) * 6] & 0xff;
+    if (anim > 0 && moveNames[i] !== 'Nothing') {
+      trueMoveIndex++;
+      moveNumToRomTable[trueMoveIndex] = i;
+      moveRomToNumTable[i] = trueMoveIndex;
+      const move = loadMoveData(rom, movesOffset, i, moveNames[i], romEntry);
+      move.number = trueMoveIndex;
+      moves[trueMoveIndex] = move;
+    }
+  }
+
+  return { moves, moveNumToRomTable, moveRomToNumTable };
+}
+
+export function saveAllMoves(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+  moves: (Move | null)[],
+): void {
+  const movesOffset = romEntryGetValue(romEntry, 'MoveDataOffset');
+  for (const m of moves) {
+    if (m != null) {
+      saveMoveData(rom, movesOffset, m, romEntry);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Evolution parsing
+// ---------------------------------------------------------------------------
+
+export function populateEvolutions(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+  pokes: Pokemon[],
+  dexMapping: PokedexMapping,
+): void {
+  const { pokeRBYToNum } = dexMapping;
+
+  for (const pkmn of pokes) {
+    if (pkmn != null) {
+      pkmn.evolutionsFrom = [];
+      pkmn.evolutionsTo = [];
+    }
+  }
+
+  const pointersOffset = romEntryGetValue(
+    romEntry,
+    'PokemonMovesetsTableOffset',
+  );
+  const pkmnCount = romEntryGetValue(romEntry, 'InternalPokemonCount');
+
+  for (let i = 1; i <= pkmnCount; i++) {
+    const pointer = readWord(rom, pointersOffset + (i - 1) * 2);
+    let realPointer = calculateOffset(bankOf(pointersOffset), pointer);
+    if (pokeRBYToNum[i] !== 0) {
+      const thisPoke = pokeRBYToNum[i];
+      if (thisPoke < 1 || thisPoke >= pokes.length || pokes[thisPoke] == null) {
+        continue;
+      }
+      const pkmn = pokes[thisPoke];
+      while (rom[realPointer] !== 0) {
+        const method = rom[realPointer];
+        const type = evolutionTypeFromIndex(1, method);
+        if (type == null) {
+          realPointer += 3;
+          continue;
+        }
+        const targetInternalId =
+          rom[realPointer + 2 + (type === EvolutionType.STONE ? 1 : 0)] & 0xff;
+        const otherPoke = pokeRBYToNum[targetInternalId];
+        const extraInfo = rom[realPointer + 1] & 0xff;
+
+        if (
+          otherPoke > 0 &&
+          otherPoke < pokes.length &&
+          pokes[otherPoke] != null
+        ) {
+          const evo = new Evolution(
+            pkmn,
+            pokes[otherPoke],
+            true,
+            type,
+            extraInfo,
+          );
+          const isDuplicate = pkmn.evolutionsFrom.some(
+            (e) =>
+              e.from === evo.from && e.to === evo.to && e.type === evo.type,
+          );
+          if (!isDuplicate) {
+            pkmn.evolutionsFrom.push(evo);
+            pokes[otherPoke].evolutionsTo.push(evo);
+          }
+        }
+        realPointer += type === EvolutionType.STONE ? 4 : 3;
+      }
+      if (pkmn.evolutionsFrom.length > 1) {
+        for (const e of pkmn.evolutionsFrom) {
+          e.carryStats = false;
+        }
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ROM I/O: loading and saving
+// ---------------------------------------------------------------------------
+
+export interface Gen1RomData {
+  rom: Uint8Array;
+  originalRom: Uint8Array;
+  romEntry: RomEntry;
+  tables: TextTables;
+  pokes: Pokemon[];
+  pokemonList: (Pokemon | null)[];
+  moves: (Move | null)[];
+  moveNumToRomTable: number[];
+  moveRomToNumTable: number[];
+  dexMapping: PokedexMapping;
+  loadedFilename: string;
+}
+
+export function parseGen1OffsetsIni(text: string): RomEntry[] {
+  const entries: RomEntry[] = [];
+  let current: RomEntry | null = null;
+
+  for (const rawLine of text.split('\n')) {
+    let q = rawLine.trim();
+    const commentIdx = q.indexOf('//');
+    if (commentIdx >= 0) {
+      q = q.substring(0, commentIdx).trim();
+    }
+    if (q === '') continue;
+
+    if (q.startsWith('[') && q.endsWith(']')) {
+      current = createDefaultRomEntry();
+      current.name = q.substring(1, q.length - 1);
+      entries.push(current);
+    } else if (current != null) {
+      const eqIdx = q.indexOf('=');
+      if (eqIdx < 0) continue;
+      const key = q.substring(0, eqIdx).trim();
+      let value = q.substring(eqIdx + 1).trim();
+      if (value.endsWith('\r')) {
+        value = value.substring(0, value.length - 1);
+      }
+
+      if (key === 'Game') {
+        current.romName = value;
+      } else if (key === 'Version') {
+        current.version = parseIniInt(value);
+      } else if (key === 'NonJapanese') {
+        current.nonJapanese = parseIniInt(value);
+      } else if (key === 'Type') {
+        current.isYellow = value.toLowerCase() === 'yellow';
+      } else if (key === 'ExtraTableFile') {
+        current.extraTableFile = value;
+      } else if (key === 'CRCInHeader') {
+        current.crcInHeader = parseIniInt(value);
+      } else if (key === 'CRC32') {
+        current.expectedCRC32 = parseIniInt(value);
+      } else if (key.endsWith('Tweak') || key.endsWith('tweak')) {
+        current.tweakFiles.set(key, value);
+      } else if (key.endsWith('[]')) {
+        const arrayKey = key.substring(0, key.length - 2);
+        if (value.startsWith('[') && value.endsWith(']')) {
+          const inner = value.substring(1, value.length - 1);
+          const nums = inner.split(',').map((s) => parseIniInt(s.trim()));
+          current.arrayEntries.set(arrayKey, nums);
+        }
+      } else if (
+        !key.includes('{}') &&
+        !key.startsWith('TMText') &&
+        !key.startsWith('StaticPokemon')
+      ) {
+        current.entries.set(key, parseIniInt(value));
+      }
+    }
+  }
+
+  return entries;
+}
+
+function parseIniInt(s: string): number {
+  s = s.trim();
+  if (s.startsWith('0x') || s.startsWith('0X')) {
+    return parseInt(s, 16);
+  }
+  return parseInt(s, 10);
+}
+
+export function loadGen1Rom(
+  romBytes: Uint8Array,
+  romEntries: RomEntry[],
+  textTableLines: string[],
+  extraTableLines: string[] | null,
+  filename: string,
+): Gen1RomData {
+  const romEntry = checkRomEntry(romBytes, romEntries);
+  if (romEntry == null) {
+    throw new Error(
+      'Could not detect ROM entry. ROM is not a recognized Gen 1 ROM.',
+    );
+  }
+
+  const rom = new Uint8Array(romBytes);
+  const originalRom = new Uint8Array(romBytes);
+
+  const tables = createTextTables();
+  readTextTable(tables, textTableLines);
+  if (extraTableLines != null) {
+    readTextTable(tables, extraTableLines);
+  }
+
+  const dexMapping = loadPokedexOrder(rom, romEntry);
+  const pokes = loadAllPokemonStats(rom, romEntry, dexMapping, tables);
+  populateEvolutions(rom, romEntry, pokes, dexMapping);
+
+  const pokemonList: (Pokemon | null)[] = new Array(pokes.length).fill(null);
+  for (let i = 0; i < pokes.length; i++) {
+    pokemonList[i] = pokes[i] ?? null;
+  }
+
+  const { moves, moveNumToRomTable, moveRomToNumTable } = loadAllMoves(
+    rom,
+    romEntry,
+    tables,
+  );
+
+  return {
+    rom,
+    originalRom,
+    romEntry,
+    tables,
+    pokes,
+    pokemonList,
+    moves,
+    moveNumToRomTable,
+    moveRomToNumTable,
+    dexMapping,
+    loadedFilename: filename,
+  };
+}
+
+export function saveGen1Rom(data: Gen1RomData): Uint8Array {
+  saveAllPokemonStats(
+    data.rom,
+    data.romEntry,
+    data.pokes,
+    data.dexMapping,
+    data.tables,
+  );
+  saveAllMoves(data.rom, data.romEntry, data.moves);
+  return data.rom;
+}
+
+// ---------------------------------------------------------------------------
+// ROM metadata helpers
+// ---------------------------------------------------------------------------
+
+export function getROMName(rom: Uint8Array): string {
+  let name = '';
+  for (
+    let i = GBConstants.romSigOffset;
+    i < GBConstants.romSigOffset + 16;
+    i++
+  ) {
+    const ch = rom[i] & 0xff;
+    if (ch === 0) break;
+    name += String.fromCharCode(ch);
+  }
+  return name;
+}
+
+export function getROMCode(rom: Uint8Array): string {
+  let code = '';
+  for (
+    let i = GBConstants.romCodeOffset;
+    i < GBConstants.romCodeOffset + 4;
+    i++
+  ) {
+    const ch = rom[i] & 0xff;
+    if (ch === 0) break;
+    code += String.fromCharCode(ch);
+  }
+  return code;
+}
+
+export function getSupportLevel(romEntry: RomEntry): string {
+  if (romEntry.name.includes('(J)')) {
+    return 'partial';
+  }
+  return 'full';
+}
+
+export function isRomValid(rom: Uint8Array, romEntries: RomEntry[]): boolean {
+  return detectRomInner(rom, rom.length, romEntries);
+}
+
+export function printRomDiagnostics(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+  filename: string,
+): string[] {
+  const lines: string[] = [];
+  lines.push('File name: ' + filename);
+  lines.push('ROM name: ' + getROMName(rom));
+  lines.push('ROM entry: ' + romEntry.name);
+  lines.push('Type: ' + (romEntry.isYellow ? 'Yellow' : 'Red/Blue'));
+  return lines;
+}
+
+// ---------------------------------------------------------------------------
+// Type Effectiveness (standalone functions for Step 8)
+// ---------------------------------------------------------------------------
+
+/**
+ * A single type effectiveness relationship: attacker type vs defender type.
+ */
+export interface TypeRelationship {
+  attacker: string;
+  defender: string;
+  effectiveness: Effectiveness;
+}
+
+/**
+ * Read the type effectiveness table from ROM.
+ */
+export function readGen1TypeEffectiveness(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+): TypeRelationship[] {
+  const typeEffectivenessTable: TypeRelationship[] = [];
+  let currentOffset = romEntryGetValue(romEntry, 'TypeEffectivenessOffset');
+  let attackingType = rom[currentOffset] & 0xFF;
+
+  while (attackingType !== 0xFF) {
+    const defendingType = rom[currentOffset + 1] & 0xFF;
+    const effectivenessInternal = rom[currentOffset + 2] & 0xFF;
+
+    const attacking =
+      attackingType < Gen1Constants.typeTable.length
+        ? Gen1Constants.typeTable[attackingType]
+        : null;
+    const defending =
+      defendingType < Gen1Constants.typeTable.length
+        ? Gen1Constants.typeTable[defendingType]
+        : null;
+
+    let effectiveness: Effectiveness | null = null;
+    switch (effectivenessInternal) {
+      case 20:
+        effectiveness = Effectiveness.DOUBLE;
+        break;
+      case 10:
+        effectiveness = Effectiveness.NEUTRAL;
+        break;
+      case 5:
+        effectiveness = Effectiveness.HALF;
+        break;
+      case 0:
+        effectiveness = Effectiveness.ZERO;
+        break;
+    }
+
+    if (effectiveness !== null && attacking !== null && defending !== null) {
+      typeEffectivenessTable.push({
+        attacker: attacking,
+        defender: defending,
+        effectiveness,
+      });
+    }
+
+    currentOffset += 3;
+    attackingType = rom[currentOffset] & 0xFF;
+  }
+
+  return typeEffectivenessTable;
+}
+
+/**
+ * Write the type effectiveness table back to ROM.
+ */
+export function writeGen1TypeEffectiveness(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+  typeEffectivenessTable: TypeRelationship[],
+): void {
+  let currentOffset = romEntryGetValue(romEntry, 'TypeEffectivenessOffset');
+  for (const relationship of typeEffectivenessTable) {
+    rom[currentOffset] = Gen1Constants.typeToByte(relationship.attacker);
+    rom[currentOffset + 1] = Gen1Constants.typeToByte(relationship.defender);
+    let effectivenessInternal = 0;
+    switch (relationship.effectiveness) {
+      case Effectiveness.DOUBLE:
+        effectivenessInternal = 20;
+        break;
+      case Effectiveness.NEUTRAL:
+        effectivenessInternal = 10;
+        break;
+      case Effectiveness.HALF:
+        effectivenessInternal = 5;
+        break;
+      case Effectiveness.ZERO:
+        effectivenessInternal = 0;
+        break;
+    }
+    rom[currentOffset + 2] = effectivenessInternal;
+    currentOffset += 3;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Item Names (standalone function for Step 8)
+// ---------------------------------------------------------------------------
+
+/**
+ * Load item names from ROM. Ported from Gen1RomHandler.loadItemNames().
+ */
+export function getGen1ItemNames(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+  tables: TextTables,
+): string[] {
+  const itemNames: string[] = new Array(256).fill('glitch');
+  const origOffset = romEntryGetValue(romEntry, 'ItemNamesOffset');
+  let itemNameOffset = origOffset;
+
+  for (let index = 1; index <= 0x100; index++) {
+    if (Math.floor(itemNameOffset / GBConstants.bankSize) > Math.floor(origOffset / GBConstants.bankSize)) {
+      break;
+    }
+    const startOfText = itemNameOffset;
+    while (itemNameOffset < rom.length && (rom[itemNameOffset] & 0xFF) !== GBConstants.stringTerminator) {
+      itemNameOffset++;
+    }
+    itemNameOffset++;
+    itemNames[index % 256] = readFixedLengthString(rom, startOfText, 20, tables);
+  }
+
+  // HMs override
+  for (let index = Gen1Constants.hmsStartIndex; index < Gen1Constants.tmsStartIndex; index++) {
+    const hmNum = index - Gen1Constants.hmsStartIndex + 1;
+    itemNames[index] = 'HM' + hmNum.toString().padStart(2, '0');
+  }
+
+  // TMs override
+  for (let index = Gen1Constants.tmsStartIndex; index < 0x100; index++) {
+    const tmNum = index - Gen1Constants.tmsStartIndex + 1;
+    itemNames[index] = 'TM' + tmNum.toString().padStart(2, '0');
+  }
+
+  return itemNames;
+}
+
+// ---------------------------------------------------------------------------
+// Misc: Randomize Intro Pokemon (standalone function for Step 8)
+// ---------------------------------------------------------------------------
+
+/**
+ * Randomize the intro Pokemon shown at the title screen.
+ */
+export function randomizeGen1IntroPokemon(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+  randomInternalId: number,
+): void {
+  rom[romEntryGetValue(romEntry, 'IntroPokemonOffset')] = randomInternalId & 0xFF;
+  rom[romEntryGetValue(romEntry, 'IntroCryOffset')] = randomInternalId & 0xFF;
+}
+
+// ---------------------------------------------------------------------------
+// Static Pokemon (standalone types/functions for Step 8)
+// ---------------------------------------------------------------------------
+
+/**
+ * Represents a static Pokemon entry from the ROM entry config.
+ */
+export interface StaticPokemonEntry {
+  speciesOffsets: number[];
+  levelOffsets: number[];
+}
+
+/**
+ * Read static Pokemon encounters from ROM using standalone function.
+ */
+export function getGen1StaticPokemon(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+  staticEntries: StaticPokemonEntry[],
+  pokemonList: (Pokemon | null)[],
+  pokeRBYToNumTable: number[],
+): StaticEncounter[] {
+  const statics: StaticEncounter[] = [];
+  if (romEntryGetValue(romEntry, 'StaticPokemonSupport') > 0) {
+    for (const sp of staticEntries) {
+      const se = new StaticEncounter();
+      const internalId = rom[sp.speciesOffsets[0]] & 0xFF;
+      const nationalNum = pokeRBYToNumTable[internalId] ?? 0;
+      se.pkmn = pokemonList[nationalNum]!;
+      se.level = sp.levelOffsets.length > 0 ? (rom[sp.levelOffsets[0]] & 0xFF) : 1;
+      statics.push(se);
+    }
+  }
+  return statics;
+}
+
+/**
+ * Write static Pokemon encounters back to ROM using standalone function.
+ */
+export function setGen1StaticPokemon(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+  staticEntries: StaticPokemonEntry[],
+  statics: StaticEncounter[],
+  pokeNumToRBYTable: number[],
+): boolean {
+  if (romEntryGetValue(romEntry, 'StaticPokemonSupport') === 0) {
+    return false;
+  }
+  for (let i = 0; i < staticEntries.length; i++) {
+    const se = statics[i];
+    const sp = staticEntries[i];
+    const rbyId = pokeNumToRBYTable[se.pkmn.number] & 0xFF;
+    for (const offset of sp.speciesOffsets) {
+      rom[offset] = rbyId;
+    }
+    if (sp.levelOffsets.length > 0) {
+      rom[sp.levelOffsets[0]] = se.level & 0xFF;
+    }
+  }
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// In-game Trades (standalone functions for Step 8)
+// ---------------------------------------------------------------------------
+
+/**
+ * Read in-game trades from ROM using standalone function.
+ */
+export function getGen1IngameTrades(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+  pokemonList: (Pokemon | null)[],
+  pokeRBYToNumTable: number[],
+  tables: TextTables,
+): IngameTrade[] {
+  const trades: IngameTrade[] = [];
+
+  const tableOffset = romEntryGetValue(romEntry, 'TradeTableOffset');
+  const tableSize = romEntryGetValue(romEntry, 'TradeTableSize');
+  const nicknameLength = romEntryGetValue(romEntry, 'TradeNameLength');
+  const unused = romEntry.arrayEntries.get('TradesUnused') ?? [];
+  let unusedOffset = 0;
+  const entryLength = nicknameLength + 3;
+
+  for (let entry = 0; entry < tableSize; entry++) {
+    if (unusedOffset < unused.length && unused[unusedOffset] === entry) {
+      unusedOffset++;
+      continue;
+    }
+    const trade = new IngameTrade();
+    const entryOffset = tableOffset + entry * entryLength;
+    trade.requestedPokemon = pokemonList[pokeRBYToNumTable[rom[entryOffset] & 0xFF]]!;
+    trade.givenPokemon = pokemonList[pokeRBYToNumTable[rom[entryOffset + 1] & 0xFF]]!;
+    trade.nickname = readStringFromRom(rom, entryOffset + 3, nicknameLength, false, tables);
+    trades.push(trade);
+  }
+
+  return trades;
+}
+
+/**
+ * Write in-game trades back to ROM using standalone function.
+ */
+export function setGen1IngameTrades(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+  trades: IngameTrade[],
+  pokeNumToRBYTable: number[],
+  tables: TextTables,
+): void {
+  const tableOffset = romEntryGetValue(romEntry, 'TradeTableOffset');
+  const tableSize = romEntryGetValue(romEntry, 'TradeTableSize');
+  const nicknameLength = romEntryGetValue(romEntry, 'TradeNameLength');
+  const unused = romEntry.arrayEntries.get('TradesUnused') ?? [];
+  let unusedOffset = 0;
+  const entryLength = nicknameLength + 3;
+  let tradeOffset = 0;
+
+  for (let entry = 0; entry < tableSize; entry++) {
+    if (unusedOffset < unused.length && unused[unusedOffset] === entry) {
+      unusedOffset++;
+      continue;
+    }
+    const trade = trades[tradeOffset++];
+    const entryOffset = tableOffset + entry * entryLength;
+    rom[entryOffset] = pokeNumToRBYTable[trade.requestedPokemon.number] & 0xFF;
+    rom[entryOffset + 1] = pokeNumToRBYTable[trade.givenPokemon.number] & 0xFF;
+    if (romEntryGetValue(romEntry, 'CanChangeTrainerText') > 0) {
+      writeFixedLengthString(rom, trade.nickname, entryOffset + 3, nicknameLength, tables);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Field TMs (standalone functions for Step 8)
+// ---------------------------------------------------------------------------
+
+export function getGen1RequiredFieldTMs(): number[] {
+  return [...Gen1Constants.requiredFieldTMs];
+}
+
+export function getGen1CurrentFieldTMs(
+  rom: Uint8Array,
+  itemOffsets: number[],
+): number[] {
+  const fieldTMs: number[] = [];
+  for (const offset of itemOffsets) {
+    const itemHere = rom[offset] & 0xFF;
+    if (itemHere >= Gen1Constants.tmsStartIndex && itemHere < Gen1Constants.tmsStartIndex + Gen1Constants.tmCount) {
+      fieldTMs.push(itemHere - Gen1Constants.tmsStartIndex + 1);
+    }
+  }
+  return fieldTMs;
+}
+
+export function setGen1FieldTMs(
+  rom: Uint8Array,
+  itemOffsets: number[],
+  fieldTMs: number[],
+): void {
+  let tmIdx = 0;
+  for (const offset of itemOffsets) {
+    const itemHere = rom[offset] & 0xFF;
+    if (itemHere >= Gen1Constants.tmsStartIndex && itemHere < Gen1Constants.tmsStartIndex + Gen1Constants.tmCount) {
+      rom[offset] = (fieldTMs[tmIdx++] + Gen1Constants.tmsStartIndex - 1) & 0xFF;
+    }
+  }
+}
+
+export function getGen1RegularFieldItems(
+  rom: Uint8Array,
+  itemOffsets: number[],
+  isAllowed: (itemId: number) => boolean,
+  isTM: (itemId: number) => boolean,
+): number[] {
+  const fieldItems: number[] = [];
+  for (const offset of itemOffsets) {
+    const itemHere = rom[offset] & 0xFF;
+    if (isAllowed(itemHere) && !isTM(itemHere)) {
+      fieldItems.push(itemHere);
+    }
+  }
+  return fieldItems;
+}
+
+export function setGen1RegularFieldItems(
+  rom: Uint8Array,
+  itemOffsets: number[],
+  items: number[],
+  isAllowed: (itemId: number) => boolean,
+  isTM: (itemId: number) => boolean,
+): void {
+  let itemIdx = 0;
+  for (const offset of itemOffsets) {
+    const itemHere = rom[offset] & 0xFF;
+    if (isAllowed(itemHere) && !isTM(itemHere)) {
+      rom[offset] = items[itemIdx++] & 0xFF;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Shops (standalone functions for Step 8)
+// ---------------------------------------------------------------------------
+
+export function getGen1ShopItems(): Map<number, Shop> | null {
+  return null;
+}
+
+export function setGen1ShopItems(_shops: Map<number, Shop>): void {
+  // Not implemented for Gen 1
+}
+
+// ---------------------------------------------------------------------------
+// Trainer Names (standalone functions for Step 8)
+// ---------------------------------------------------------------------------
+
+export function getGen1TrainerNames(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+  tables: TextTables,
+): string[] {
+  const offsets = romEntry.arrayEntries.get('TrainerClassNamesOffsets') ?? [];
+  if (offsets.length === 0) return [];
+  const trainerNames: string[] = [];
+  let offset = offsets[offsets.length - 1];
+  for (let j = 0; j < Gen1Constants.tclassesCounts[1]; j++) {
+    const name = readVariableLengthString(rom, offset, false, tables);
+    offset += lengthOfStringAt(rom, offset, false) + 1;
+    if (Gen1Constants.singularTrainers.includes(j)) {
+      trainerNames.push(name);
+    }
+  }
+  return trainerNames;
+}
+
+export function setGen1TrainerNames(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+  names: string[],
+  tables: TextTables,
+): void {
+  if (romEntryGetValue(romEntry, 'CanChangeTrainerText') <= 0) return;
+  const offsets = romEntry.arrayEntries.get('TrainerClassNamesOffsets') ?? [];
+  if (offsets.length === 0) return;
+  let nameIdx = 0;
+  let offset = offsets[offsets.length - 1];
+  for (let j = 0; j < Gen1Constants.tclassesCounts[1]; j++) {
+    const oldLength = lengthOfStringAt(rom, offset, false) + 1;
+    if (Gen1Constants.singularTrainers.includes(j)) {
+      const newName = names[nameIdx++];
+      writeFixedLengthString(rom, newName, offset, oldLength, tables);
+    }
+    offset += oldLength;
+  }
+}
+
+export function getGen1TrainerClassNames(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+  tables: TextTables,
+): string[] {
+  const offsets = romEntry.arrayEntries.get('TrainerClassNamesOffsets') ?? [];
+  if (offsets.length === 0) return [];
+  const trainerClassNames: string[] = [];
+  if (offsets.length === 2) {
+    for (let i = 0; i < offsets.length; i++) {
+      let offset = offsets[i];
+      for (let j = 0; j < Gen1Constants.tclassesCounts[i]; j++) {
+        const name = readVariableLengthString(rom, offset, false, tables);
+        offset += lengthOfStringAt(rom, offset, false) + 1;
+        if (i === 0 || !Gen1Constants.singularTrainers.includes(j)) {
+          trainerClassNames.push(name);
+        }
+      }
+    }
+  } else {
+    let offset = offsets[0];
+    for (let j = 0; j < Gen1Constants.tclassesCounts[1]; j++) {
+      const name = readVariableLengthString(rom, offset, false, tables);
+      offset += lengthOfStringAt(rom, offset, false) + 1;
+      if (!Gen1Constants.singularTrainers.includes(j)) {
+        trainerClassNames.push(name);
+      }
+    }
+  }
+  return trainerClassNames;
+}
+
+export function setGen1TrainerClassNames(
+  rom: Uint8Array,
+  romEntry: RomEntry,
+  names: string[],
+  tables: TextTables,
+): void {
+  if (romEntryGetValue(romEntry, 'CanChangeTrainerText') <= 0) return;
+  const offsets = romEntry.arrayEntries.get('TrainerClassNamesOffsets') ?? [];
+  if (offsets.length === 0) return;
+  let nameIdx = 0;
+  if (offsets.length === 2) {
+    for (let i = 0; i < offsets.length; i++) {
+      let offset = offsets[i];
+      for (let j = 0; j < Gen1Constants.tclassesCounts[i]; j++) {
+        const oldLength = lengthOfStringAt(rom, offset, false) + 1;
+        if (i === 0 || !Gen1Constants.singularTrainers.includes(j)) {
+          const newName = names[nameIdx++];
+          writeFixedLengthString(rom, newName, offset, oldLength, tables);
+        }
+        offset += oldLength;
+      }
+    }
+  } else {
+    let offset = offsets[0];
+    for (let j = 0; j < Gen1Constants.tclassesCounts[1]; j++) {
+      const oldLength = lengthOfStringAt(rom, offset, false) + 1;
+      if (!Gen1Constants.singularTrainers.includes(j)) {
+        const newName = names[nameIdx++];
+        writeFixedLengthString(rom, newName, offset, oldLength, tables);
+      }
+      offset += oldLength;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Known Gen 1 ROM entries for factory detection
+// ---------------------------------------------------------------------------
+
+export const knownGen1RomEntries: RomEntry[] = [
+  { ...createDefaultRomEntry(), name: 'Pokemon Red (U)', romName: 'POKEMON RED', version: 0, nonJapanese: 1, crcInHeader: -1 },
+  { ...createDefaultRomEntry(), name: 'Pokemon Blue (U)', romName: 'POKEMON BLUE', version: 0, nonJapanese: 1, crcInHeader: -1 },
+  { ...createDefaultRomEntry(), name: 'Pokemon Yellow (U)', romName: 'POKEMON YELLOW', version: 0, nonJapanese: 1, crcInHeader: -1, isYellow: true },
+];
+
+// ---------------------------------------------------------------------------
+// Gen1RomHandlerFactory - extends RomHandlerFactory for CLI wiring
+// ---------------------------------------------------------------------------
+
+export class Gen1RomHandlerFactory extends RomHandlerFactory {
+  private romEntries: RomEntry[];
+
+  constructor(romEntries?: RomEntry[]) {
+    super();
+    this.romEntries = romEntries ?? knownGen1RomEntries;
+  }
+
+  isLoadable(filename: string): boolean {
+    try {
+      const fs = require('fs') as typeof import('fs');
+      const stats = fs.statSync(filename);
+      if (stats.size < GBConstants.minRomSize || stats.size > GBConstants.maxRomSize) {
+        return false;
+      }
+      const fd = fs.openSync(filename, 'r');
+      const headerSize = Math.min(stats.size, 0x1000);
+      const buffer = Buffer.alloc(headerSize);
+      fs.readSync(fd, buffer, 0, headerSize, 0);
+      fs.closeSync(fd);
+      const data = new Uint8Array(buffer);
+      return detectRomInner(data, stats.size, this.romEntries);
+    } catch {
+      return false;
+    }
+  }
+
+  createWithLog(random: RandomInstance, log: LogStream | null): RomHandler {
+    return new Gen1RomHandler(random, log) as unknown as RomHandler;
   }
 }
