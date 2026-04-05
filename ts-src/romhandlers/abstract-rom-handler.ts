@@ -6,7 +6,7 @@
  * Faithfully ported from AbstractRomHandler.java (7,563 lines).
  */
 
-import type { RomHandler, LogStream, TrainerNameMode } from "./rom-handler";
+import { type RomHandler, type LogStream, TrainerNameMode } from "./rom-handler";
 import type { Settings } from "../config/settings";
 import {
   BaseStatisticsMod,
@@ -19,29 +19,38 @@ import {
   TMsHMsCompatibilityMod,
   MoveTutorsCompatibilityMod,
   InGameTradesMod,
+  FieldItemsMod,
+  ShopItemsMod,
+  ExpCurveMod,
+  EvolutionsMod,
 } from "../config/settings";
 import type { Pokemon } from "../pokemon/pokemon";
-import { Move } from "../pokemon/move";
+import { ExpCurve } from "../pokemon/exp-curve";
+import { Move, MoveStatChange } from "../pokemon/move";
 import type { MegaEvolution } from "../pokemon/mega-evolution";
 import { MoveLearnt } from "../pokemon/move-learnt";
 import { type Trainer, MultiBattleStatus } from "../pokemon/trainer";
 import type { TrainerPokemon } from "../pokemon/trainer-pokemon";
 import type { Encounter } from "../pokemon/encounter";
-import type { Evolution } from "../pokemon/evolution";
+import { Evolution } from "../pokemon/evolution";
 import type { EncounterSet } from "../pokemon/encounter-set";
 import { StaticEncounter } from "../pokemon/static-encounter";
 import type { TotemPokemon } from "../pokemon/totem-pokemon";
 import type { IngameTrade } from "../pokemon/ingame-trade";
 import type { PickupItem } from "../pokemon/pickup-item";
-import type { Shop } from "../pokemon/shop";
+import { Shop } from "../pokemon/shop";
 import type { ItemList } from "../pokemon/item-list";
 import type { GenRestrictions } from "../pokemon/gen-restrictions";
 import { Type, isHackOnly } from "../pokemon/type";
 import { randomType as typeRandomType } from "../pokemon/type";
 import { MoveCategory } from "../pokemon/move-category";
+import { StatChangeMoveType } from "../pokemon/stat-change-move-type";
+import { StatChangeType } from "../pokemon/stat-change-type";
+import { StatusType } from "../pokemon/status-type";
 import { Stat } from "../pokemon/stat";
 import type { StatChange } from "../pokemon/stat-change";
-import type { EvolutionUpdate } from "./evolution-update";
+import { EvolutionUpdate } from "./evolution-update";
+import { EvolutionType, usesLevel as evoUsesLevel } from "../pokemon/evolution-type";
 import type { RandomInstance } from "../utils/random-source";
 import { RandomSource } from "../utils/random-source";
 import { RomFunctions } from "../utils/rom-functions";
@@ -92,6 +101,12 @@ export abstract class AbstractRomHandler implements RomHandler {
   protected isORAS = false;
   protected isSM = false;
   protected perfectAccuracy = 100;
+
+  protected impossibleEvolutionUpdates: Set<EvolutionUpdate> = new Set();
+  protected timeBasedEvolutionUpdates: Set<EvolutionUpdate> = new Set();
+  protected easierEvolutionUpdates: Set<EvolutionUpdate> = new Set();
+
+  private moveUpdates: Map<number, boolean[]> = new Map();
 
   private twoEvoPokes: Pokemon[] | null = null;
 
@@ -1007,6 +1022,30 @@ export abstract class AbstractRomHandler implements RomHandler {
     return GlobalConstants.xItems;
   }
 
+  // ---- Item placement history helpers (for even distribution) ----
+
+  private setItemPlacementHistory(newItem: number): void {
+    const history = this.getItemPlacementHistory(newItem);
+    this.itemPlacementHistory.set(newItem, history + 1);
+  }
+
+  private getItemPlacementHistory(newItem: number): number {
+    if (this.itemPlacementHistory.has(newItem)) {
+      return this.itemPlacementHistory.get(newItem)!;
+    }
+    return 0;
+  }
+
+  private getItemPlacementAverage(): number {
+    const keys = Array.from(this.itemPlacementHistory.keys());
+    if (keys.length === 0) return 0;
+    let total = 0;
+    for (const key of keys) {
+      total += this.itemPlacementHistory.get(key)!;
+    }
+    return total / keys.length;
+  }
+
   getSensibleHeldItemsFor(
     _tp: TrainerPokemon,
     _consumableOnly: boolean,
@@ -1407,6 +1446,373 @@ export abstract class AbstractRomHandler implements RomHandler {
     }
   }
 
+  // -- Evolution helper methods --
+
+  protected addEvoUpdateLevel(evolutionUpdates: Set<EvolutionUpdate>, evo: Evolution): void {
+    evolutionUpdates.add(new EvolutionUpdate(evo.from, evo.to, EvolutionType.LEVEL, String(evo.extraInfo), false, false));
+  }
+
+  protected addEvoUpdateCondensed(evolutionUpdates: Set<EvolutionUpdate>, evo: Evolution, additional: boolean): void {
+    evolutionUpdates.add(new EvolutionUpdate(evo.from, evo.to, EvolutionType.LEVEL, String(evo.extraInfo), true, additional));
+  }
+
+  private evoCycleCheck(from: Pokemon, to: Pokemon): boolean {
+    const tempEvo = new Evolution(from, to, false, EvolutionType.NONE, 0);
+    from.evolutionsFrom.push(tempEvo);
+    const visited = new Set<Pokemon>();
+    const recStack = new Set<Pokemon>();
+    const recur = this.isCyclic(from, visited, recStack);
+    const idx = from.evolutionsFrom.indexOf(tempEvo);
+    if (idx >= 0) from.evolutionsFrom.splice(idx, 1);
+    return recur;
+  }
+
+  private isCyclic(pk: Pokemon, visited: Set<Pokemon>, recStack: Set<Pokemon>): boolean {
+    if (!visited.has(pk)) {
+      visited.add(pk);
+      recStack.add(pk);
+      for (const ev of pk.evolutionsFrom) {
+        if (!visited.has(ev.to) && this.isCyclic(ev.to, visited, recStack)) {
+          return true;
+        } else if (recStack.has(ev.to)) {
+          return true;
+        }
+      }
+    }
+    recStack.delete(pk);
+    return false;
+  }
+
+  private numPreEvolutions(pk: Pokemon, maxInterested: number, depth: number = 0): number {
+    if (pk.evolutionsTo.length === 0) {
+      return 0;
+    }
+    if (depth === maxInterested - 1) {
+      return 1;
+    }
+    let maxPreEvos = 0;
+    for (const ev of pk.evolutionsTo) {
+      maxPreEvos = Math.max(maxPreEvos, this.numPreEvolutions(ev.from, maxInterested, depth + 1) + 1);
+    }
+    return maxPreEvos;
+  }
+
+  private relatedPokemon(original: Pokemon): Set<Pokemon> {
+    const results = new Set<Pokemon>();
+    results.add(original);
+    const toCheck: Pokemon[] = [original];
+    while (toCheck.length > 0) {
+      const check = toCheck.shift()!;
+      for (const ev of check.evolutionsFrom) {
+        if (!results.has(ev.to)) { results.add(ev.to); toCheck.push(ev.to); }
+      }
+      for (const ev of check.evolutionsTo) {
+        if (!results.has(ev.from)) { results.add(ev.from); toCheck.push(ev.from); }
+      }
+    }
+    return results;
+  }
+
+  private pickEvoPowerLvlReplacement(pokemonPool: Pokemon[], current: Pokemon): Pokemon {
+    const currentBST = current.bstForPowerLevels();
+    let minTarget = currentBST - Math.floor(currentBST / 10);
+    let maxTarget = currentBST + Math.floor(currentBST / 10);
+    const canPick: Pokemon[] = [];
+    const emergencyPick: Pokemon[] = [];
+    let expandRounds = 0;
+    while (canPick.length === 0 || (canPick.length < 3 && expandRounds < 3)) {
+      for (const pk of pokemonPool) {
+        const bst = pk.bstForPowerLevels();
+        if (bst >= minTarget && bst <= maxTarget && !canPick.includes(pk) && !emergencyPick.includes(pk)) {
+          if (this.alreadyPicked.includes(pk)) { emergencyPick.push(pk); } else { canPick.push(pk); }
+        }
+      }
+      if (expandRounds >= 2 && canPick.length === 0) { canPick.push(...emergencyPick); }
+      minTarget -= Math.floor(currentBST / 20);
+      maxTarget += Math.floor(currentBST / 20);
+      expandRounds++;
+    }
+    return canPick[this.random.nextInt(canPick.length)];
+  }
+
+  // -- Evolution randomization methods --
+
+  condenseLevelEvolutions(maxLevel: number, maxIntermediateLevel: number): void {
+    const allPokemon = this.getPokemon();
+    for (const pk of allPokemon) {
+      if (pk != null) {
+        for (const checkEvo of pk.evolutionsFrom) {
+          if (evoUsesLevel(checkEvo.type)) {
+            if (checkEvo.extraInfo > maxIntermediateLevel && checkEvo.to.evolutionsFrom.length > 0) {
+              checkEvo.extraInfo = maxIntermediateLevel;
+              this.addEvoUpdateCondensed(this.easierEvolutionUpdates, checkEvo, false);
+            } else if (checkEvo.extraInfo > maxLevel) {
+              checkEvo.extraInfo = maxLevel;
+              this.addEvoUpdateCondensed(this.easierEvolutionUpdates, checkEvo, false);
+            }
+          }
+          if (checkEvo.type === EvolutionType.LEVEL_UPSIDE_DOWN) {
+            checkEvo.type = EvolutionType.LEVEL;
+            this.addEvoUpdateCondensed(this.easierEvolutionUpdates, checkEvo, false);
+          }
+        }
+      }
+    }
+  }
+
+  getImpossibleEvoUpdates(): Set<EvolutionUpdate> { return this.impossibleEvolutionUpdates; }
+  getEasierEvoUpdates(): Set<EvolutionUpdate> { return this.easierEvolutionUpdates; }
+  getTimeBasedEvoUpdates(): Set<EvolutionUpdate> { return this.timeBasedEvolutionUpdates; }
+
+  randomizeEvolutions(settings: Settings): void {
+    const similarStrength = settings.evosSimilarStrength;
+    const sameType = settings.evosSameTyping;
+    const limitToThreeStages = settings.evosMaxThreeStages;
+    const forceChange = settings.evosForceChange;
+    const allowAltFormes = settings.evosAllowAltFormes;
+    const banIrregularAltFormes = settings.banIrregularAltFormes;
+    const abilitiesAreRandomized = settings.abilitiesMod === AbilitiesMod.RANDOMIZE;
+
+    this.checkPokemonRestrictions();
+    let pokemonPool: Pokemon[];
+    if (this.altFormesCanHaveDifferentEvolutions()) {
+      pokemonPool = [...this.mainPokemonListInclFormes];
+    } else {
+      pokemonPool = [...this.mainPokemonList];
+    }
+    const actuallyCosmeticPokemonPool: Pokemon[] = [];
+    const stageLimit = limitToThreeStages ? 3 : 10;
+
+    const banned: Pokemon[] = [...this.getBannedFormesForPlayerPokemon()];
+    if (!abilitiesAreRandomized) { banned.push(...this.getAbilityDependentFormes()); }
+    if (banIrregularAltFormes) { banned.push(...this.getIrregularFormes()); }
+
+    for (let i = 0; i < pokemonPool.length; i++) {
+      const pk = pokemonPool[i];
+      if (pk.actuallyCosmetic) { pokemonPool.splice(i, 1); i--; actuallyCosmeticPokemonPool.push(pk); }
+    }
+
+    const originalEvos = new Map<Pokemon, Evolution[]>();
+    for (const pk of pokemonPool) { originalEvos.set(pk, [...pk.evolutionsFrom]); }
+
+    const evoPairKey = (from: Pokemon, to: Pokemon): string => `${from.number}:${to.number}`;
+    const newEvoPairs = new Set<string>();
+    const oldEvoPairs = new Set<string>();
+
+    if (forceChange) {
+      for (const pk of pokemonPool) {
+        for (const ev of pk.evolutionsFrom) {
+          oldEvoPairs.add(evoPairKey(ev.from, ev.to));
+          if (this.generationOfPokemon() >= 7 && ev.from.number === Species.cosmoem) {
+            const opp = ev.to.number === Species.solgaleo ? Species.lunala : Species.solgaleo;
+            const toPkmn = this.findPokemonInPoolWithSpeciesID(pokemonPool, opp);
+            if (toPkmn != null) { oldEvoPairs.add(evoPairKey(ev.from, toPkmn)); }
+          }
+        }
+      }
+    }
+
+    const replacements: Pokemon[] = [];
+    let loops = 0;
+    while (loops < 1) {
+      let hadError = false;
+      for (const pk of pokemonPool) { pk.evolutionsFrom.length = 0; pk.evolutionsTo.length = 0; }
+      newEvoPairs.clear();
+      this.shuffleArray(pokemonPool);
+
+      for (const fromPK of pokemonPool) {
+        const oldEvos = originalEvos.get(fromPK) || [];
+        for (const ev of oldEvos) {
+          replacements.length = 0;
+          const chosenList: Pokemon[] = allowAltFormes
+            ? this.mainPokemonListInclFormes.filter((pk) => !pk.actuallyCosmetic)
+            : this.mainPokemonList;
+
+          for (const pk of chosenList) {
+            if (pk === fromPK) continue;
+            if (pk.growthCurve !== fromPK.growthCurve) continue;
+            if (banned.includes(pk)) continue;
+            const epKey = evoPairKey(fromPK, pk);
+            if (newEvoPairs.has(epKey)) continue;
+            if (forceChange && oldEvoPairs.has(epKey)) continue;
+            if (this.evoCycleCheck(fromPK, pk)) continue;
+
+            const tempEvo = new Evolution(fromPK, pk, false, EvolutionType.NONE, 0);
+            fromPK.evolutionsFrom.push(tempEvo);
+            pk.evolutionsTo.push(tempEvo);
+            let exceededLimit = false;
+            const related = this.relatedPokemon(fromPK);
+            for (const pk2 of related) {
+              const npe = this.numPreEvolutions(pk2, stageLimit);
+              if (npe >= stageLimit) { exceededLimit = true; break; }
+              if (npe === stageLimit - 1 && pk2.evolutionsFrom.length === 0 && (originalEvos.get(pk2) || []).length > 0) { exceededLimit = true; break; }
+            }
+            const ti = fromPK.evolutionsFrom.indexOf(tempEvo);
+            if (ti >= 0) fromPK.evolutionsFrom.splice(ti, 1);
+            const ti2 = pk.evolutionsTo.indexOf(tempEvo);
+            if (ti2 >= 0) pk.evolutionsTo.splice(ti2, 1);
+            if (exceededLimit) continue;
+            replacements.push(pk);
+          }
+
+          if (replacements.length === 0) { hadError = true; break; }
+
+          if (replacements.length > 1 && sameType) {
+            const includeType: Pokemon[] = [];
+            for (const pk of replacements) {
+              if (fromPK.number === Species.eevee) {
+                if (pk.primaryType === ev.to.primaryType || (pk.secondaryType != null && pk.secondaryType === ev.to.primaryType)) { includeType.push(pk); }
+              } else if (pk.primaryType === fromPK.primaryType
+                || (fromPK.secondaryType != null && pk.primaryType === fromPK.secondaryType)
+                || (pk.secondaryType != null && pk.secondaryType === fromPK.primaryType)
+                || (fromPK.secondaryType != null && pk.secondaryType != null && pk.secondaryType === fromPK.secondaryType)) {
+                includeType.push(pk);
+              }
+            }
+            if (includeType.length !== 0) {
+              const s = new Set(includeType);
+              for (let i = replacements.length - 1; i >= 0; i--) { if (!s.has(replacements[i])) replacements.splice(i, 1); }
+            }
+          }
+
+          if (!replacements.every((p) => this.alreadyPicked.includes(p)) && !similarStrength) {
+            for (let i = replacements.length - 1; i >= 0; i--) {
+              if (this.alreadyPicked.includes(replacements[i])) replacements.splice(i, 1);
+            }
+          }
+
+          let picked: Pokemon;
+          if (replacements.length === 1) { picked = replacements[0]; }
+          else if (similarStrength) { picked = this.pickEvoPowerLvlReplacement(replacements, ev.to); }
+          else { picked = replacements[this.random.nextInt(replacements.length)]; }
+          this.alreadyPicked.push(picked);
+
+          const newEvo = new Evolution(fromPK, picked, ev.carryStats, ev.type, ev.extraInfo);
+          let checkCosmetics = true;
+          if (picked.formeNumber > 0) { newEvo.forme = picked.formeNumber; newEvo.formeSuffix = picked.formeSuffix; checkCosmetics = false; }
+          if (checkCosmetics && newEvo.to.cosmeticForms > 0) {
+            newEvo.forme = newEvo.to.getCosmeticFormNumber(this.random.nextInt(newEvo.to.cosmeticForms));
+          } else if (!checkCosmetics && picked.cosmeticForms > 0) {
+            newEvo.forme += picked.getCosmeticFormNumber(this.random.nextInt(picked.cosmeticForms));
+          }
+          if (newEvo.type === EvolutionType.LEVEL_FEMALE_ESPURR) { newEvo.type = EvolutionType.LEVEL_FEMALE_ONLY; }
+          fromPK.evolutionsFrom.push(newEvo);
+          picked.evolutionsTo.push(newEvo);
+          newEvoPairs.add(evoPairKey(fromPK, picked));
+        }
+        if (hadError) break;
+      }
+
+      if (!hadError) {
+        for (const pk of actuallyCosmeticPokemonPool) { pk.copyBaseFormeEvolutions(pk.baseForme!); }
+        return;
+      }
+      loops++;
+    }
+    throw new RandomizationException("Not able to randomize evolutions in a sane amount of retries.");
+  }
+
+  randomizeEvolutionsEveryLevel(settings: Settings): void {
+    const sameType = settings.evosSameTyping;
+    const forceChange = settings.evosForceChange;
+    const allowAltFormes = settings.evosAllowAltFormes;
+    const abilitiesAreRandomized = settings.abilitiesMod === AbilitiesMod.RANDOMIZE;
+
+    this.checkPokemonRestrictions();
+    let pokemonPool: Pokemon[];
+    if (this.altFormesCanHaveDifferentEvolutions()) {
+      pokemonPool = [...this.mainPokemonListInclFormes];
+    } else {
+      pokemonPool = [...this.mainPokemonList];
+    }
+    const actuallyCosmeticPokemonPool: Pokemon[] = [];
+    const banned: Pokemon[] = [...this.getBannedFormesForPlayerPokemon()];
+    if (!abilitiesAreRandomized) { banned.push(...this.getAbilityDependentFormes()); }
+
+    for (let i = 0; i < pokemonPool.length; i++) {
+      const pk = pokemonPool[i];
+      if (pk.actuallyCosmetic) { pokemonPool.splice(i, 1); i--; actuallyCosmeticPokemonPool.push(pk); }
+    }
+
+    const evoPairKey = (from: Pokemon, to: Pokemon): string => `${from.number}:${to.number}`;
+    const oldEvoPairs = new Set<string>();
+    if (forceChange) {
+      for (const pk of pokemonPool) {
+        for (const ev of pk.evolutionsFrom) {
+          oldEvoPairs.add(evoPairKey(ev.from, ev.to));
+          if (this.generationOfPokemon() >= 7 && ev.from.number === Species.cosmoem) {
+            const opp = ev.to.number === Species.solgaleo ? Species.lunala : Species.solgaleo;
+            const toPkmn = this.findPokemonInPoolWithSpeciesID(pokemonPool, opp);
+            if (toPkmn != null) { oldEvoPairs.add(evoPairKey(ev.from, toPkmn)); }
+          }
+        }
+      }
+    }
+
+    const replacements: Pokemon[] = [];
+    let loops = 0;
+    while (loops < 1) {
+      let hadError = false;
+      for (const pk of pokemonPool) { pk.evolutionsFrom.length = 0; pk.evolutionsTo.length = 0; }
+      this.shuffleArray(pokemonPool);
+
+      for (const fromPK of pokemonPool) {
+        replacements.length = 0;
+        const chosenList: Pokemon[] = allowAltFormes
+          ? this.mainPokemonListInclFormes.filter((pk) => !pk.actuallyCosmetic)
+          : this.mainPokemonList;
+
+        for (const pk of chosenList) {
+          if (pk === fromPK) continue;
+          if (pk.growthCurve !== fromPK.growthCurve) continue;
+          if (banned.includes(pk)) continue;
+          const epKey = evoPairKey(fromPK, pk);
+          if (forceChange && oldEvoPairs.has(epKey)) continue;
+          replacements.push(pk);
+        }
+
+        if (replacements.length === 0) { hadError = true; break; }
+
+        if (replacements.length > 1 && sameType) {
+          const includeType: Pokemon[] = [];
+          for (const pk of replacements) {
+            if (pk.primaryType === fromPK.primaryType
+              || (fromPK.secondaryType != null && pk.primaryType === fromPK.secondaryType)
+              || (pk.secondaryType != null && pk.secondaryType === fromPK.primaryType)
+              || (pk.secondaryType != null && pk.secondaryType === fromPK.secondaryType)) {
+              includeType.push(pk);
+            }
+          }
+          if (includeType.length !== 0) {
+            const s = new Set(includeType);
+            for (let i = replacements.length - 1; i >= 0; i--) { if (!s.has(replacements[i])) replacements.splice(i, 1); }
+          }
+        }
+
+        const picked = replacements.length === 1 ? replacements[0] : replacements[this.random.nextInt(replacements.length)];
+
+        const newEvo = new Evolution(fromPK, picked, false, EvolutionType.LEVEL, 1);
+        newEvo.level = 1;
+        let checkCosmetics = true;
+        if (picked.formeNumber > 0) { newEvo.forme = picked.formeNumber; newEvo.formeSuffix = picked.formeSuffix; checkCosmetics = false; }
+        if (checkCosmetics && newEvo.to.cosmeticForms > 0) {
+          newEvo.forme = newEvo.to.getCosmeticFormNumber(this.random.nextInt(newEvo.to.cosmeticForms));
+        } else if (!checkCosmetics && picked.cosmeticForms > 0) {
+          newEvo.forme += picked.getCosmeticFormNumber(this.random.nextInt(picked.cosmeticForms));
+        }
+        fromPK.evolutionsFrom.push(newEvo);
+        picked.evolutionsTo.push(newEvo);
+      }
+
+      if (!hadError) {
+        for (const pk of actuallyCosmeticPokemonPool) { pk.copyBaseFormeEvolutions(pk.baseForme!); }
+        return;
+      }
+      loops++;
+    }
+    throw new RandomizationException("Not able to randomize evolutions in a sane amount of retries.");
+  }
+
   // -- ORAS-specific stubs (only relevant for Gen6+ handlers) --
   protected collapseAreasORAS(encounters: EncounterSet[]): EncounterSet[] {
     return encounters;
@@ -1504,6 +1910,7 @@ export abstract class AbstractRomHandler implements RomHandler {
           alreadyPicked = [];
         } else {
           strongerMoves = strongerMoves.filter(m => !alreadyPicked.includes(m));
+          if (strongerMoves.length === 0) break;
         }
         const extraMove = strongerMoves[this.random.nextInt(strongerMoves.length)];
         avg = (avg * typeMoves.length + extraMove.power * extraMove.hitCount) / (typeMoves.length + 1);
@@ -1520,6 +1927,7 @@ export abstract class AbstractRomHandler implements RomHandler {
           alreadyPicked = [];
         } else {
           weakerMoves = weakerMoves.filter(m => !alreadyPicked.includes(m));
+          if (weakerMoves.length === 0) break;
         }
         const extraMove = weakerMoves[this.random.nextInt(weakerMoves.length)];
         avg = (avg * typeMoves.length + extraMove.power * extraMove.hitCount) / (typeMoves.length + 1);
@@ -1743,7 +2151,32 @@ export abstract class AbstractRomHandler implements RomHandler {
   abstract randomizeStarterHeldItems(settings: Settings): void;
 
   abstract getUpdatedPokemonStats(generation: number): Map<number, StatChange>;
-  abstract standardizeEXPCurves(settings: Settings): void;
+  standardizeEXPCurves(settings: Settings): void {
+    const mod = settings.expCurveMod;
+    const expCurve = settings.selectedEXPCurve;
+
+    const pokes = this.getPokemonInclFormes();
+    switch (mod) {
+      case ExpCurveMod.LEGENDARIES:
+        for (const pkmn of pokes) {
+          if (pkmn == null) continue;
+          pkmn.growthCurve = pkmn.isLegendary() ? ExpCurve.SLOW : expCurve;
+        }
+        break;
+      case ExpCurveMod.STRONG_LEGENDARIES:
+        for (const pkmn of pokes) {
+          if (pkmn == null) continue;
+          pkmn.growthCurve = pkmn.isStrongLegendary() ? ExpCurve.SLOW : expCurve;
+        }
+        break;
+      case ExpCurveMod.ALL:
+        for (const pkmn of pokes) {
+          if (pkmn == null) continue;
+          pkmn.growthCurve = expCurve;
+        }
+        break;
+    }
+  }
 
   abstract abilitiesPerPokemon(): number;
   abstract highestAbilityIndex(): number;
@@ -2276,11 +2709,46 @@ export abstract class AbstractRomHandler implements RomHandler {
   }
   abstract hasWildAltFormes(): boolean;
   abstract randomizeWildHeldItems(settings: Settings): void;
-  abstract changeCatchRates(settings: Settings): void;
-  abstract minimumCatchRate(
-    rateNonLegendary: number,
-    rateLegendary: number
-  ): void;
+  changeCatchRates(settings: Settings): void {
+    const minimumCatchRateLevel = settings.minimumCatchRateLevel;
+
+    if (minimumCatchRateLevel === 5) {
+      this.enableGuaranteedPokemonCatching();
+    } else {
+      let normalMin: number;
+      let legendaryMin: number;
+      switch (minimumCatchRateLevel) {
+        case 2:
+          normalMin = 128;
+          legendaryMin = 64;
+          break;
+        case 3:
+          normalMin = 200;
+          legendaryMin = 100;
+          break;
+        case 4:
+          normalMin = 255;
+          legendaryMin = 255;
+          break;
+        case 1:
+        default:
+          normalMin = 75;
+          legendaryMin = 37;
+          break;
+      }
+      this.minimumCatchRate(normalMin, legendaryMin);
+    }
+  }
+
+  minimumCatchRate(rateNonLegendary: number, rateLegendary: number): void {
+    const pokes = this.getPokemonInclFormes();
+    for (const pkmn of pokes) {
+      if (pkmn == null) continue;
+      const minCatchRate = pkmn.isLegendary() ? rateLegendary : rateNonLegendary;
+      pkmn.catchRate = Math.max(pkmn.catchRate, minCatchRate);
+    }
+  }
+
   abstract enableGuaranteedPokemonCatching(): void;
 
   abstract getTrainers(): Trainer[];
@@ -2426,12 +2894,543 @@ export abstract class AbstractRomHandler implements RomHandler {
     tp: TrainerPokemon,
     cyclicEvolutions: boolean
   ): Move[];
-  abstract pickTrainerMovesets(settings: Settings): void;
+  pickTrainerMovesets(settings: Settings): void {
+    const isCyclicEvolutions =
+      settings.evolutionsMod === EvolutionsMod.RANDOM_EVERY_LEVEL;
+    const isDoubleBattleMode = settings.doubleBattleMode;
+    const trainers = this.getTrainers();
+
+    for (const t of trainers) {
+      t.setPokemonHaveCustomMoves(true);
+      for (const tp of t.pokemon) {
+        tp.resetMoves = false;
+        let movesAtLevel: Move[] = this.getMoveSelectionPoolAtLevel(tp, isCyclicEvolutions);
+        movesAtLevel = this.trimMoveList(tp, movesAtLevel, isDoubleBattleMode);
+        if (movesAtLevel.length === 0) continue;
+
+        let trainerTypeModifier = 1;
+        if (t.isImportant()) trainerTypeModifier = 1.5;
+        else if (t.isBoss()) trainerTypeModifier = 2;
+        const movePoolSizeModifier = movesAtLevel.length / 10.0;
+        const bonusModifier = trainerTypeModifier * movePoolSizeModifier;
+        const atkSpatkRatioModifier = 0.75;
+        const stabMoveBias = 0.25 * bonusModifier;
+
+        // Add bias for STAB
+        const pk = this.getAltFormeOfPokemon(tp.pokemon, tp.forme);
+        let stabMoves = movesAtLevel.filter(
+          (mv) => mv.type === pk.primaryType && mv.category !== MoveCategory.STATUS,
+        );
+        this.shuffleArray(stabMoves);
+        for (let i = 0; i < stabMoveBias * stabMoves.length; i++) {
+          movesAtLevel.push(stabMoves[i % stabMoves.length]);
+        }
+        if (pk.secondaryType != null) {
+          stabMoves = [...movesAtLevel].filter(
+            (mv) => mv.type === pk.secondaryType && mv.category !== MoveCategory.STATUS,
+          );
+          this.shuffleArray(stabMoves);
+          for (let i = 0; i < stabMoveBias * stabMoves.length; i++) {
+            movesAtLevel.push(stabMoves[i % stabMoves.length]);
+          }
+        }
+
+        // NOTE: MoveSynergy methods are not yet ported; ability/stat synergy
+        // bias steps that depend on MoveSynergy are skipped.
+
+        let distinctMoveList = [...new Set(movesAtLevel)];
+        let movesLeft = distinctMoveList.length;
+        if (movesLeft <= 4) {
+          for (let i = 0; i < 4; i++) tp.moves[i] = i < movesLeft ? distinctMoveList[i].number : 0;
+          continue;
+        }
+
+        // Add bias for atk/spatk ratio
+        let atkSpatkRatio = pk.attack / pk.spatk;
+        switch (this.getAbilityForTrainerPokemon(tp)) {
+          case Abilities.hugePower: case Abilities.purePower: atkSpatkRatio *= 2; break;
+          case Abilities.hustle: case Abilities.gorillaTactics: atkSpatkRatio *= 1.5; break;
+          case Abilities.moxie: atkSpatkRatio *= 1.1; break;
+          case Abilities.soulHeart: atkSpatkRatio *= 0.9; break;
+        }
+        const physicalMoves = [...movesAtLevel].filter((mv) => mv.category === MoveCategory.PHYSICAL);
+        const specialMoves = [...movesAtLevel].filter((mv) => mv.category === MoveCategory.SPECIAL);
+        if (atkSpatkRatio < 1 && specialMoves.length > 0) {
+          atkSpatkRatio = 1 / atkSpatkRatio;
+          const acceptedRatio = atkSpatkRatioModifier * atkSpatkRatio;
+          const additionalMoves = Math.floor(physicalMoves.length * acceptedRatio) - specialMoves.length;
+          for (let i = 0; i < additionalMoves; i++) {
+            movesAtLevel.push(specialMoves[this.random.nextInt(specialMoves.length)]);
+          }
+        } else if (physicalMoves.length > 0) {
+          const acceptedRatio = atkSpatkRatioModifier * atkSpatkRatio;
+          const additionalMoves = Math.floor(specialMoves.length * acceptedRatio) - physicalMoves.length;
+          for (let i = 0; i < additionalMoves; i++) {
+            movesAtLevel.push(physicalMoves[this.random.nextInt(physicalMoves.length)]);
+          }
+        }
+
+        // Pick moves
+        const pickedMoves: Move[] = [];
+        for (let i = 1; i <= 4; i++) {
+          let pickFrom: Move[];
+          if (i === 1) {
+            pickFrom = movesAtLevel.filter((mv) => mv.isGoodDamaging(this.perfectAccuracy));
+            if (pickFrom.length === 0) pickFrom = movesAtLevel;
+          } else {
+            pickFrom = movesAtLevel;
+          }
+          if (i === 4) {
+            const uniqueRequires = [...new Set(
+              movesAtLevel.filter((mv) => GlobalConstants.requiresOtherMove.includes(mv.number)),
+            )];
+            for (const dependentMove of uniqueRequires) {
+              let hasRequiredMove = false;
+              for (const picked of pickedMoves) {
+                if (this.isEnablerFor(dependentMove, picked)) { hasRequiredMove = true; break; }
+              }
+              if (!hasRequiredMove) movesAtLevel = movesAtLevel.filter((mv) => mv !== dependentMove);
+            }
+            pickFrom = movesAtLevel;
+          }
+          if (pickFrom.length === 0) break;
+          const move = pickFrom[this.random.nextInt(pickFrom.length)];
+          pickedMoves.push(move);
+          if (i === 4) break;
+
+          movesAtLevel = movesAtLevel.filter((mv) => mv !== move);
+          // NOTE: MoveSynergy hard/soft move synergy/anti-synergy steps skipped
+          distinctMoveList = [...new Set(movesAtLevel)];
+          movesLeft = distinctMoveList.length;
+          if (movesLeft <= 4 - i) { pickedMoves.push(...distinctMoveList); break; }
+        }
+
+        const movesPicked = pickedMoves.length;
+        for (let i = 0; i < 4; i++) tp.moves[i] = i < movesPicked ? pickedMoves[i].number : 0;
+      }
+    }
+    this.setTrainers(trainers, false);
+  }
+
+  private trimMoveList(tp: TrainerPokemon, movesAtLevel: Move[], doubleBattleMode: boolean): Move[] {
+    let movesLeft = movesAtLevel.length;
+    if (movesLeft <= 4) {
+      for (let i = 0; i < 4; i++) tp.moves[i] = i < movesLeft ? movesAtLevel[i].number : 0;
+      return [];
+    }
+    movesAtLevel = movesAtLevel.filter(
+      (mv) => !GlobalConstants.uselessMoves.includes(mv.number) &&
+        (doubleBattleMode || !GlobalConstants.doubleBattleMoves.includes(mv.number)),
+    );
+    movesLeft = movesAtLevel.length;
+    if (movesLeft <= 4) {
+      for (let i = 0; i < 4; i++) tp.moves[i] = i < movesLeft ? movesAtLevel[i].number : 0;
+      return [];
+    }
+    const obsoletedMoves = this.getObsoleteMoves(movesAtLevel);
+    movesAtLevel = movesAtLevel.filter((mv) => !obsoletedMoves.includes(mv));
+    movesLeft = movesAtLevel.length;
+    if (movesLeft <= 4) {
+      for (let i = 0; i < 4; i++) tp.moves[i] = i < movesLeft ? movesAtLevel[i].number : 0;
+      return [];
+    }
+    // Remove dependent moves whose requirements aren't met
+    const requiresOtherMoveList = movesAtLevel.filter(
+      (mv) => GlobalConstants.requiresOtherMove.includes(mv.number),
+    );
+    for (const dependentMove of requiresOtherMoveList) {
+      if (!this.hasEnablerInPool(dependentMove, movesAtLevel)) {
+        const idx = movesAtLevel.indexOf(dependentMove);
+        if (idx >= 0) movesAtLevel.splice(idx, 1);
+      }
+    }
+    movesLeft = movesAtLevel.length;
+    if (movesLeft <= 4) {
+      for (let i = 0; i < 4; i++) tp.moves[i] = i < movesLeft ? movesAtLevel[i].number : 0;
+      return [];
+    }
+    // NOTE: Hard ability anti-synergy removal skipped (requires MoveSynergy)
+    return movesAtLevel;
+  }
+
+  private hasEnablerInPool(dependentMove: Move, movesAtLevel: Move[]): boolean {
+    if (dependentMove.number === Moves.spitUp || dependentMove.number === Moves.swallow) {
+      return movesAtLevel.some((mv) => mv.number === Moves.stockpile);
+    }
+    if (dependentMove.number === Moves.dreamEater || dependentMove.number === Moves.nightmare) {
+      return movesAtLevel.some((mv) => mv.statusType === StatusType.SLEEP && mv.statusPercentChance > 0);
+    }
+    return true;
+  }
+
+  private isEnablerFor(dependentMove: Move, candidate: Move): boolean {
+    if (dependentMove.number === Moves.spitUp || dependentMove.number === Moves.swallow) {
+      return candidate.number === Moves.stockpile;
+    }
+    if (dependentMove.number === Moves.dreamEater || dependentMove.number === Moves.nightmare) {
+      return candidate.statusType === StatusType.SLEEP && candidate.statusPercentChance > 0;
+    }
+    return false;
+  }
+
+  private getObsoleteMoves(movesAtLevel: Move[]): Move[] {
+    const obsoletedMoves: Move[] = [];
+    for (const mv of movesAtLevel) {
+      if (GlobalConstants.cannotObsoleteMoves.includes(mv.number)) continue;
+      if (mv.power > 0) {
+        const obsoleteThis = movesAtLevel.filter((mv2) =>
+          !GlobalConstants.cannotBeObsoletedMoves.includes(mv2.number) &&
+          mv.type === mv2.type &&
+          ((((mv.statChangeMoveType === mv2.statChangeMoveType &&
+            mv.statChanges[0].equals(mv2.statChanges[0])) ||
+            (mv2.statChangeMoveType === StatChangeMoveType.NONE_OR_UNKNOWN && mv.hasBeneficialStatChange())) &&
+            mv.absorbPercent >= mv2.absorbPercent && !mv.isChargeMove && !mv.isRechargeMove) ||
+            mv2.power * mv2.hitCount <= 30) &&
+          mv.hitratio >= mv2.hitratio && mv.category === mv2.category &&
+          mv.priority >= mv2.priority && mv2.power > 0 &&
+          mv.power * mv.hitCount > mv2.power * mv2.hitCount,
+        );
+        obsoletedMoves.push(...obsoleteThis);
+      } else if (
+        mv.statChangeMoveType === StatChangeMoveType.NO_DAMAGE_USER ||
+        mv.statChangeMoveType === StatChangeMoveType.NO_DAMAGE_TARGET
+      ) {
+        const obsoleteThis: Move[] = [];
+        const statChanges1: MoveStatChange[] = mv.statChanges.filter((sc) => sc.type !== StatChangeType.NONE);
+        const candidates = movesAtLevel.filter((otherMv) =>
+          otherMv !== mv && otherMv.power <= 0 &&
+          otherMv.statChangeMoveType === mv.statChangeMoveType &&
+          (otherMv.statusType === mv.statusType || otherMv.statusType === StatusType.NONE),
+        );
+        for (const mv2 of candidates) {
+          const statChanges2: MoveStatChange[] = mv2.statChanges.filter((sc) => sc.type !== StatChangeType.NONE);
+          if (statChanges2.length > statChanges1.length) continue;
+          const statChanges1Filtered = statChanges1.filter((sc) => !statChanges2.some((sc2) => sc.equals(sc2)));
+          const statChanges2Remaining = statChanges2.filter((sc) => !statChanges1.some((sc2) => sc.equals(sc2)));
+          if (statChanges1Filtered.length > 0 && statChanges2Remaining.length === 0) {
+            if (!GlobalConstants.cannotBeObsoletedMoves.includes(mv2.number)) obsoleteThis.push(mv2);
+            continue;
+          }
+          if (statChanges1Filtered.length === 0 && statChanges2Remaining.length === 0) continue;
+          let maybeBetter = false;
+          for (const sc1 of statChanges1Filtered) {
+            let canStillBeBetter = false;
+            for (const sc2 of statChanges2Remaining) {
+              if (sc1.type === sc2.type) {
+                canStillBeBetter = true;
+                if ((mv.statChangeMoveType === StatChangeMoveType.NO_DAMAGE_USER && sc1.stages > sc2.stages) ||
+                  (mv.statChangeMoveType === StatChangeMoveType.NO_DAMAGE_TARGET && sc1.stages < sc2.stages)) {
+                  maybeBetter = true;
+                } else {
+                  canStillBeBetter = false;
+                }
+              }
+            }
+            if (!canStillBeBetter) { maybeBetter = false; break; }
+          }
+          if (maybeBetter && !GlobalConstants.cannotBeObsoletedMoves.includes(mv2.number)) {
+            obsoleteThis.push(mv2);
+          }
+        }
+        obsoletedMoves.push(...obsoleteThis);
+      }
+    }
+    return [...new Set(obsoletedMoves)];
+  }
 
   abstract hasPhysicalSpecialSplit(): boolean;
-  abstract updateMoves(settings: Settings): void;
-  abstract initMoveUpdates(): void;
-  abstract getMoveUpdates(): Map<number, boolean[]>;
+
+  updateMoves(settings: Settings): void {
+    const generation = settings.updateMovesToGeneration;
+    const moves = this.getMoves();
+
+    if (generation >= 2 && this.generationOfPokemon() < 2) {
+      this.updateMoveType(moves, Moves.karateChop, Type.FIGHTING);
+      this.updateMoveType(moves, Moves.gust, Type.FLYING);
+      this.updateMovePower(moves, Moves.wingAttack, 60);
+      this.updateMoveAccuracy(moves, Moves.whirlwind, 100);
+      this.updateMoveType(moves, Moves.sandAttack, Type.GROUND);
+      this.updateMovePower(moves, Moves.doubleEdge, 120);
+      this.updateMoveAccuracy(moves, Moves.blizzard, 70);
+      this.updateMoveAccuracy(moves, Moves.rockThrow, 90);
+      this.updateMoveAccuracy(moves, Moves.hypnosis, 60);
+      this.updateMovePower(moves, Moves.selfDestruct, 200);
+      this.updateMovePower(moves, Moves.explosion, 250);
+      this.updateMovePower(moves, Moves.dig, 60);
+    }
+
+    if (generation >= 3 && this.generationOfPokemon() < 3) {
+      this.updateMoveAccuracy(moves, Moves.razorWind, 100);
+      this.updateMoveAccuracy(moves, Moves.lowKick, 100);
+    }
+
+    if (generation >= 4 && this.generationOfPokemon() < 4) {
+      this.updateMovePower(moves, Moves.fly, 90);
+      this.updateMovePP(moves, Moves.vineWhip, 15);
+      this.updateMovePP(moves, Moves.absorb, 25);
+      this.updateMovePP(moves, Moves.megaDrain, 15);
+      this.updateMovePower(moves, Moves.dig, 80);
+      this.updateMovePP(moves, Moves.recover, 10);
+      this.updateMoveAccuracy(moves, Moves.flash, 100);
+      this.updateMovePower(moves, Moves.petalDance, 90);
+      this.updateMoveAccuracy(moves, Moves.disable, 80);
+      this.updateMovePower(moves, Moves.jumpKick, 85);
+      this.updateMovePower(moves, Moves.highJumpKick, 100);
+
+      if (this.generationOfPokemon() >= 2) {
+        this.updateMovePower(moves, Moves.zapCannon, 120);
+        this.updateMovePower(moves, Moves.outrage, 120);
+        this.updateMovePP(moves, Moves.outrage, 10);
+        this.updateMovePP(moves, Moves.gigaDrain, 10);
+        this.updateMovePower(moves, Moves.rockSmash, 40);
+      }
+
+      if (this.generationOfPokemon() === 3) {
+        this.updateMovePP(moves, Moves.stockpile, 20);
+        this.updateMovePower(moves, Moves.dive, 80);
+        this.updateMovePower(moves, Moves.leafBlade, 90);
+      }
+    }
+
+    if (generation >= 5 && this.generationOfPokemon() < 5) {
+      this.updateMoveAccuracy(moves, Moves.bind, 85);
+      this.updateMovePP(moves, Moves.jumpKick, 10);
+      this.updateMovePower(moves, Moves.jumpKick, 100);
+      this.updateMovePower(moves, Moves.tackle, 50);
+      this.updateMoveAccuracy(moves, Moves.tackle, 100);
+      this.updateMoveAccuracy(moves, Moves.wrap, 90);
+      this.updateMovePP(moves, Moves.thrash, 10);
+      this.updateMovePower(moves, Moves.thrash, 120);
+      this.updateMoveAccuracy(moves, Moves.disable, 100);
+      this.updateMovePP(moves, Moves.petalDance, 10);
+      this.updateMovePower(moves, Moves.petalDance, 120);
+      this.updateMoveAccuracy(moves, Moves.fireSpin, 85);
+      this.updateMovePower(moves, Moves.fireSpin, 35);
+      this.updateMoveAccuracy(moves, Moves.toxic, 90);
+      this.updateMoveAccuracy(moves, Moves.clamp, 85);
+      this.updateMovePP(moves, Moves.clamp, 15);
+      this.updateMovePP(moves, Moves.highJumpKick, 10);
+      this.updateMovePower(moves, Moves.highJumpKick, 130);
+      this.updateMoveAccuracy(moves, Moves.glare, 90);
+      this.updateMoveAccuracy(moves, Moves.poisonGas, 80);
+      this.updateMoveAccuracy(moves, Moves.crabhammer, 90);
+
+      if (this.generationOfPokemon() >= 2) {
+        this.updateMoveType(moves, Moves.curse, Type.GHOST);
+        this.updateMoveAccuracy(moves, Moves.cottonSpore, 100);
+        this.updateMoveAccuracy(moves, Moves.scaryFace, 100);
+        this.updateMoveAccuracy(moves, Moves.boneRush, 90);
+        this.updateMovePower(moves, Moves.gigaDrain, 75);
+        this.updateMovePower(moves, Moves.furyCutter, 20);
+        this.updateMovePP(moves, Moves.futureSight, 10);
+        this.updateMovePower(moves, Moves.futureSight, 100);
+        this.updateMoveAccuracy(moves, Moves.futureSight, 100);
+        this.updateMovePower(moves, Moves.whirlpool, 35);
+        this.updateMoveAccuracy(moves, Moves.whirlpool, 85);
+      }
+
+      if (this.generationOfPokemon() >= 3) {
+        this.updateMovePower(moves, Moves.uproar, 90);
+        this.updateMovePower(moves, Moves.sandTomb, 35);
+        this.updateMoveAccuracy(moves, Moves.sandTomb, 85);
+        this.updateMovePower(moves, Moves.bulletSeed, 25);
+        this.updateMovePower(moves, Moves.icicleSpear, 25);
+        this.updateMovePower(moves, Moves.covet, 60);
+        this.updateMoveAccuracy(moves, Moves.rockBlast, 90);
+        this.updateMovePower(moves, Moves.doomDesire, 140);
+        this.updateMoveAccuracy(moves, Moves.doomDesire, 100);
+      }
+
+      if (this.generationOfPokemon() === 4) {
+        this.updateMovePower(moves, Moves.feint, 30);
+        this.updateMovePower(moves, Moves.lastResort, 140);
+        this.updateMovePP(moves, Moves.drainPunch, 10);
+        this.updateMovePower(moves, Moves.drainPunch, 75);
+        this.updateMoveAccuracy(moves, Moves.magmaStorm, 75);
+      }
+    }
+
+    if (generation >= 6 && this.generationOfPokemon() < 6) {
+      this.updateMovePP(moves, Moves.swordsDance, 20);
+      this.updateMoveAccuracy(moves, Moves.whirlwind, this.perfectAccuracy);
+      this.updateMovePP(moves, Moves.vineWhip, 25);
+      this.updateMovePower(moves, Moves.vineWhip, 45);
+      this.updateMovePower(moves, Moves.pinMissile, 25);
+      this.updateMoveAccuracy(moves, Moves.pinMissile, 95);
+      this.updateMovePower(moves, Moves.flamethrower, 90);
+      this.updateMovePower(moves, Moves.hydroPump, 110);
+      this.updateMovePower(moves, Moves.surf, 90);
+      this.updateMovePower(moves, Moves.iceBeam, 90);
+      this.updateMovePower(moves, Moves.blizzard, 110);
+      this.updateMovePP(moves, Moves.growth, 20);
+      this.updateMovePower(moves, Moves.thunderbolt, 90);
+      this.updateMovePower(moves, Moves.thunder, 110);
+      this.updateMovePP(moves, Moves.minimize, 10);
+      this.updateMovePP(moves, Moves.barrier, 20);
+      this.updateMovePower(moves, Moves.lick, 30);
+      this.updateMovePower(moves, Moves.smog, 30);
+      this.updateMovePower(moves, Moves.fireBlast, 110);
+      this.updateMovePP(moves, Moves.skullBash, 10);
+      this.updateMovePower(moves, Moves.skullBash, 130);
+      this.updateMoveAccuracy(moves, Moves.glare, 100);
+      this.updateMoveAccuracy(moves, Moves.poisonGas, 90);
+      this.updateMovePower(moves, Moves.bubble, 40);
+      this.updateMoveAccuracy(moves, Moves.psywave, 100);
+      this.updateMovePP(moves, Moves.acidArmor, 20);
+      this.updateMovePower(moves, Moves.crabhammer, 100);
+
+      if (this.generationOfPokemon() >= 2) {
+        this.updateMovePP(moves, Moves.thief, 25);
+        this.updateMovePower(moves, Moves.thief, 60);
+        this.updateMovePower(moves, Moves.snore, 50);
+        this.updateMovePower(moves, Moves.furyCutter, 40);
+        this.updateMovePower(moves, Moves.futureSight, 120);
+      }
+
+      if (this.generationOfPokemon() >= 3) {
+        this.updateMovePower(moves, Moves.heatWave, 95);
+        this.updateMoveAccuracy(moves, Moves.willOWisp, 85);
+        this.updateMovePower(moves, Moves.smellingSalts, 70);
+        this.updateMovePower(moves, Moves.knockOff, 65);
+        this.updateMovePower(moves, Moves.meteorMash, 90);
+        this.updateMoveAccuracy(moves, Moves.meteorMash, 90);
+        this.updateMovePower(moves, Moves.airCutter, 60);
+        this.updateMovePower(moves, Moves.overheat, 130);
+        this.updateMovePP(moves, Moves.rockTomb, 15);
+        this.updateMovePower(moves, Moves.rockTomb, 60);
+        this.updateMoveAccuracy(moves, Moves.rockTomb, 95);
+        this.updateMovePP(moves, Moves.extrasensory, 20);
+        this.updateMovePower(moves, Moves.muddyWater, 90);
+        this.updateMovePP(moves, Moves.covet, 25);
+      }
+
+      if (this.generationOfPokemon() >= 4) {
+        this.updateMovePower(moves, Moves.wakeUpSlap, 70);
+        this.updateMovePP(moves, Moves.tailwind, 15);
+        this.updateMovePower(moves, Moves.assurance, 60);
+        this.updateMoveAccuracy(moves, Moves.psychoShift, 100);
+        this.updateMovePower(moves, Moves.auraSphere, 80);
+        this.updateMovePP(moves, Moves.airSlash, 15);
+        this.updateMovePower(moves, Moves.dragonPulse, 85);
+        this.updateMovePower(moves, Moves.powerGem, 80);
+        this.updateMovePower(moves, Moves.energyBall, 90);
+        this.updateMovePower(moves, Moves.dracoMeteor, 130);
+        this.updateMovePower(moves, Moves.leafStorm, 130);
+        this.updateMoveAccuracy(moves, Moves.gunkShot, 80);
+        this.updateMovePower(moves, Moves.chatter, 65);
+        this.updateMovePower(moves, Moves.magmaStorm, 100);
+      }
+
+      if (this.generationOfPokemon() === 5) {
+        this.updateMovePower(moves, Moves.synchronoise, 120);
+        this.updateMovePower(moves, Moves.lowSweep, 65);
+        this.updateMovePower(moves, Moves.hex, 65);
+        this.updateMovePower(moves, Moves.incinerate, 60);
+        this.updateMovePower(moves, Moves.waterPledge, 80);
+        this.updateMovePower(moves, Moves.firePledge, 80);
+        this.updateMovePower(moves, Moves.grassPledge, 80);
+        this.updateMovePower(moves, Moves.struggleBug, 50);
+        this.updateMovePower(moves, Moves.frostBreath, 45);
+        this.updateMovePower(moves, Moves.stormThrow, 45);
+        this.updateMovePP(moves, Moves.sacredSword, 15);
+        this.updateMovePower(moves, Moves.hurricane, 110);
+        this.updateMovePower(moves, Moves.technoBlast, 120);
+      }
+    }
+
+    if (generation >= 7 && this.generationOfPokemon() < 7) {
+      this.updateMovePower(moves, Moves.leechLife, 80);
+      this.updateMovePP(moves, Moves.leechLife, 10);
+      this.updateMovePP(moves, Moves.submission, 20);
+      this.updateMovePower(moves, Moves.tackle, 40);
+      this.updateMoveAccuracy(moves, Moves.thunderWave, 90);
+
+      if (this.generationOfPokemon() >= 2) {
+        this.updateMoveAccuracy(moves, Moves.swagger, 85);
+      }
+
+      if (this.generationOfPokemon() >= 3) {
+        this.updateMovePP(moves, Moves.knockOff, 20);
+      }
+
+      if (this.generationOfPokemon() >= 4) {
+        this.updateMoveAccuracy(moves, Moves.darkVoid, 50);
+        this.updateMovePower(moves, Moves.suckerPunch, 70);
+      }
+
+      if (this.generationOfPokemon() === 6) {
+        this.updateMoveAccuracy(
+          moves,
+          Moves.aromaticMist,
+          this.perfectAccuracy
+        );
+        this.updateMovePower(moves, Moves.fellStinger, 50);
+        this.updateMovePower(moves, Moves.flyingPress, 100);
+        this.updateMovePP(moves, Moves.matBlock, 10);
+        this.updateMovePower(moves, Moves.mysticalFire, 75);
+        this.updateMovePower(moves, Moves.parabolicCharge, 65);
+        this.updateMoveAccuracy(
+          moves,
+          Moves.topsyTurvy,
+          this.perfectAccuracy
+        );
+        this.updateMoveCategory(
+          moves,
+          Moves.waterShuriken,
+          MoveCategory.SPECIAL
+        );
+      }
+    }
+
+    if (generation >= 8 && this.generationOfPokemon() < 8) {
+      if (this.generationOfPokemon() >= 2) {
+        this.updateMovePower(moves, Moves.rapidSpin, 50);
+      }
+
+      if (this.generationOfPokemon() === 7) {
+        this.updateMovePower(moves, Moves.multiAttack, 120);
+      }
+    }
+
+    if (generation >= 9 && this.generationOfPokemon() < 9) {
+      this.updateMovePP(moves, Moves.recover, 5);
+      this.updateMovePP(moves, Moves.softBoiled, 5);
+      this.updateMovePP(moves, Moves.rest, 5);
+
+      if (this.generationOfPokemon() >= 2) {
+        this.updateMovePP(moves, Moves.milkDrink, 5);
+      }
+
+      if (this.generationOfPokemon() >= 3) {
+        this.updateMovePower(moves, Moves.lusterPurge, 95);
+        this.updateMovePower(moves, Moves.mistBall, 95);
+        this.updateMovePP(moves, Moves.slackOff, 5);
+      }
+
+      if (this.generationOfPokemon() >= 4) {
+        this.updateMovePP(moves, Moves.roost, 5);
+      }
+
+      if (this.generationOfPokemon() >= 7) {
+        this.updateMovePP(moves, Moves.shoreUp, 5);
+      }
+
+      if (this.generationOfPokemon() >= 8) {
+        this.updateMovePower(moves, Moves.grassyGlide, 55);
+        this.updateMovePower(moves, Moves.wickedBlow, 75);
+        this.updateMovePower(moves, Moves.glacialLance, 120);
+      }
+    }
+  }
+
+  initMoveUpdates(): void {
+    this.moveUpdates = new Map();
+  }
+
+  getMoveUpdates(): Map<number, boolean[]> {
+    return this.moveUpdates;
+  }
+
   abstract getMoves(): (Move | null)[];
 
   abstract getMovesLearnt(): Map<number, MoveLearnt[]>;
@@ -2605,8 +3604,112 @@ export abstract class AbstractRomHandler implements RomHandler {
     this.setMovesLearnt(movesets);
   }
   abstract randomizeEggMoves(settings: Settings): void;
-  abstract orderDamagingMovesByDamage(): void;
-  abstract metronomeOnlyMode(): void;
+
+  orderDamagingMovesByDamage(): void {
+    const movesets = this.getMovesLearnt();
+    const allMoves = this.getMoves();
+    for (const [_pkmn, moves] of movesets) {
+      // Build up a list of damaging moves and their positions
+      const damagingMoveIndices: number[] = [];
+      const damagingMoves: Move[] = [];
+      for (let i = 0; i < moves.length; i++) {
+        if (moves[i].level === 0) continue; // Don't reorder evolution move
+        const mv = allMoves[moves[i].move];
+        if (mv != null && mv.power > 1) {
+          damagingMoveIndices.push(i);
+          damagingMoves.push(mv);
+        }
+      }
+
+      // Ties should be sorted randomly, so shuffle the list first.
+      for (let i = damagingMoves.length - 1; i > 0; i--) {
+        const j = this.random.nextInt(i + 1);
+        const tmpMove = damagingMoves[i];
+        damagingMoves[i] = damagingMoves[j];
+        damagingMoves[j] = tmpMove;
+      }
+
+      // Sort the damaging moves by power
+      damagingMoves.sort(
+        (a, b) => a.power * a.hitCount - b.power * b.hitCount
+      );
+
+      // Reassign damaging moves in the ordered positions
+      for (let i = 0; i < damagingMoves.length; i++) {
+        moves[damagingMoveIndices[i]].move = damagingMoves[i].number;
+      }
+    }
+
+    // Done, save
+    this.setMovesLearnt(movesets);
+  }
+
+  metronomeOnlyMode(): void {
+    // movesets
+    const movesets = this.getMovesLearnt();
+
+    const metronomeML = new MoveLearnt();
+    metronomeML.level = 1;
+    metronomeML.move = Moves.metronome;
+
+    for (const ms of movesets.values()) {
+      if (ms != null && ms.length > 0) {
+        ms.length = 0;
+        ms.push(metronomeML);
+      }
+    }
+
+    this.setMovesLearnt(movesets);
+
+    // trainers - run this to remove all custom non-Metronome moves
+    const trainers = this.getTrainers();
+
+    for (const t of trainers) {
+      for (const tpk of t.pokemon) {
+        tpk.resetMoves = true;
+      }
+    }
+
+    this.setTrainers(trainers, false);
+
+    // tms
+    const tmMoves = this.getTMMoves();
+
+    for (let i = 0; i < tmMoves.length; i++) {
+      tmMoves[i] = Moves.metronome;
+    }
+
+    this.setTMMoves(tmMoves);
+
+    // movetutors
+    if (this.hasMoveTutors()) {
+      const mtMoves = this.getMoveTutorMoves();
+
+      for (let i = 0; i < mtMoves.length; i++) {
+        mtMoves[i] = Moves.metronome;
+      }
+
+      this.setMoveTutorMoves(mtMoves);
+    }
+
+    // move tweaks
+    const moveData = this.getMoves();
+
+    const metronomeMove = moveData[Moves.metronome];
+    if (metronomeMove != null) {
+      metronomeMove.pp = 40;
+    }
+
+    const hms = this.getHMMoves();
+
+    for (const hm of hms) {
+      const thisHM = moveData[hm];
+      if (thisHM != null) {
+        thisHM.pp = 0;
+      }
+    }
+  }
+
   abstract supportsFourStartingMoves(): boolean;
 
   abstract getStaticPokemon(): StaticEncounter[];
@@ -2745,7 +3848,23 @@ export abstract class AbstractRomHandler implements RomHandler {
 
   abstract canChangeStaticPokemon(): boolean;
   abstract hasStaticAltFormes(): boolean;
-  abstract onlyChangeStaticLevels(settings: Settings): void;
+  onlyChangeStaticLevels(settings: Settings): void {
+    const levelModifier = settings.staticLevelModifier;
+
+    const currentStaticPokemon = this.getStaticPokemon();
+    for (const se of currentStaticPokemon) {
+      if (!se.isEgg) {
+        se.level = Math.min(100, Math.round(se.level * (1 + levelModifier / 100.0)));
+        for (const linkedStatic of se.linkedEncounters) {
+          if (!linkedStatic.isEgg) {
+            linkedStatic.level = Math.min(100, Math.round(linkedStatic.level * (1 + levelModifier / 100.0)));
+          }
+        }
+      }
+      this.setPokemonAndFormeForStaticEncounter(se, se.pkmn);
+    }
+    this.setStaticPokemon(currentStaticPokemon);
+  }
   abstract hasMainGameLegendaries(): boolean;
   abstract getMainGameLegendaries(): number[];
   abstract getSpecialMusicStatics(): number[];
@@ -2761,18 +3880,307 @@ export abstract class AbstractRomHandler implements RomHandler {
   abstract getTMMoves(): number[];
   abstract getHMMoves(): number[];
   abstract setTMMoves(moveIndexes: number[]): void;
-  abstract randomizeTMMoves(settings: Settings): void;
+  randomizeTMMoves(settings: Settings): void {
+    const noBroken = settings.blockBrokenTMMoves;
+    const preserveField = settings.keepFieldMoveTMs;
+    const goodDamagingPercentage = settings.tmsForceGoodDamaging
+      ? settings.tmsGoodDamagingPercent / 100.0
+      : 0;
+
+    const tmCount = this.getTMCount();
+    const allMoves = this.getMoves();
+    const hms = this.getHMMoves();
+    const oldTMs = this.getTMMoves();
+
+    const banned = new Set<number>(noBroken ? this.getGameBreakingMoves() : []);
+    for (const b of this.getMovesBannedFromLevelup()) banned.add(b);
+    for (const il of this.getIllegalMoves()) banned.add(il);
+
+    // field moves?
+    const fieldMoves = this.getFieldMoves();
+    let preservedFieldMoveCount = 0;
+
+    if (preserveField) {
+      const existingFieldTMs = oldTMs.filter((tm) => fieldMoves.includes(tm));
+      preservedFieldMoveCount = existingFieldTMs.length;
+      for (const fm of existingFieldTMs) banned.add(fm);
+    }
+
+    // Determine which moves are pickable
+    const usableMoves: Move[] = [];
+    const usableDamagingMoves: Move[] = [];
+
+    for (let i = 1; i < allMoves.length; i++) {
+      const mv = allMoves[i];
+      if (mv == null) continue;
+      if (
+        GlobalConstants.bannedRandomMoves[mv.number] ||
+        GlobalConstants.zMoves.includes(mv.number) ||
+        hms.includes(mv.number) ||
+        banned.has(mv.number)
+      ) {
+        continue;
+      }
+      usableMoves.push(mv);
+      if (
+        !GlobalConstants.bannedForDamagingMove[mv.number] &&
+        mv.isGoodDamaging(this.perfectAccuracy)
+      ) {
+        usableDamagingMoves.push(mv);
+      }
+    }
+
+    // pick (tmCount - preservedFieldMoveCount) moves
+    const pickedMoves: number[] = [];
+    let goodDamagingLeft = Math.round(
+      goodDamagingPercentage * (tmCount - preservedFieldMoveCount)
+    );
+
+    for (let i = 0; i < tmCount - preservedFieldMoveCount; i++) {
+      let chosenMove: Move;
+      if (goodDamagingLeft > 0 && usableDamagingMoves.length > 0) {
+        const idx = this.random.nextInt(usableDamagingMoves.length);
+        chosenMove = usableDamagingMoves[idx];
+      } else {
+        const idx = this.random.nextInt(usableMoves.length);
+        chosenMove = usableMoves[idx];
+      }
+      pickedMoves.push(chosenMove.number);
+      // Remove from both lists
+      const uIdx = usableMoves.indexOf(chosenMove);
+      if (uIdx >= 0) usableMoves.splice(uIdx, 1);
+      const dIdx = usableDamagingMoves.indexOf(chosenMove);
+      if (dIdx >= 0) usableDamagingMoves.splice(dIdx, 1);
+      goodDamagingLeft--;
+    }
+
+    // shuffle picked moves to avoid bias from goodDamagingPercentage
+    this.shuffleArray(pickedMoves);
+
+    // distribute as TMs
+    let pickedMoveIndex = 0;
+    const newTMs: number[] = [];
+
+    for (let i = 0; i < tmCount; i++) {
+      if (preserveField && fieldMoves.includes(oldTMs[i])) {
+        newTMs.push(oldTMs[i]);
+      } else {
+        newTMs.push(pickedMoves[pickedMoveIndex++]);
+      }
+    }
+
+    this.setTMMoves(newTMs);
+  }
   abstract getTMCount(): number;
   abstract getHMCount(): number;
   abstract getTMHMCompatibility(): Map<Pokemon, boolean[]>;
   abstract setTMHMCompatibility(compatData: Map<Pokemon, boolean[]>): void;
-  abstract randomizeTMHMCompatibility(settings: Settings): void;
-  abstract fullTMHMCompatibility(): void;
-  abstract ensureTMCompatSanity(): void;
-  abstract ensureTMEvolutionSanity(): void;
-  abstract fullHMCompatibility(): void;
+  randomizeTMHMCompatibility(settings: Settings): void {
+    const preferSameType =
+      settings.tmsHmsCompatibilityMod === TMsHMsCompatibilityMod.RANDOM_PREFER_TYPE;
+    const followEvolutions = settings.tmsFollowEvolutions;
 
-  abstract copyTMCompatibilityToCosmeticFormes(): void;
+    // Get current compatibility
+    // increase HM chances if required early on
+    const requiredEarlyOn = this.getEarlyRequiredHMMoves();
+    const compat = this.getTMHMCompatibility();
+    const tmHMs: number[] = [...this.getTMMoves(), ...this.getHMMoves()];
+
+    if (followEvolutions) {
+      this.copyUpEvolutionsHelper4(
+        (pk: Pokemon) =>
+          this.randomizePokemonMoveCompatibility(
+            pk,
+            compat.get(pk)!,
+            tmHMs,
+            requiredEarlyOn,
+            preferSameType
+          ),
+        (evFrom: Pokemon, evTo: Pokemon, _toMonIsFinalEvo: boolean) =>
+          this.copyPokemonMoveCompatibilityUpEvolutions(
+            evFrom,
+            evTo,
+            compat.get(evFrom)!,
+            compat.get(evTo)!,
+            tmHMs,
+            preferSameType
+          ),
+        null,
+        true
+      );
+    } else {
+      for (const [pk, flags] of compat) {
+        this.randomizePokemonMoveCompatibility(
+          pk,
+          flags,
+          tmHMs,
+          requiredEarlyOn,
+          preferSameType
+        );
+      }
+    }
+
+    // Set the new compatibility
+    this.setTMHMCompatibility(compat);
+  }
+
+  private randomizePokemonMoveCompatibility(
+    pkmn: Pokemon,
+    moveCompatibilityFlags: boolean[],
+    moveIDs: number[],
+    prioritizedMoves: number[],
+    preferSameType: boolean
+  ): void {
+    const moveData = this.getMoves();
+    for (let i = 1; i <= moveIDs.length; i++) {
+      const move = moveIDs[i - 1];
+      const mv = moveData[move]!;
+      const probability = this.getMoveCompatibilityProbability(
+        pkmn,
+        mv,
+        prioritizedMoves.includes(move),
+        preferSameType
+      );
+      moveCompatibilityFlags[i] = this.random.nextDouble() < probability;
+    }
+  }
+
+  private copyPokemonMoveCompatibilityUpEvolutions(
+    evFrom: Pokemon,
+    evTo: Pokemon,
+    prevCompatibilityFlags: boolean[],
+    toCompatibilityFlags: boolean[],
+    moveIDs: number[],
+    preferSameType: boolean
+  ): void {
+    const moveData = this.getMoves();
+    for (let i = 1; i <= moveIDs.length; i++) {
+      if (!prevCompatibilityFlags[i]) {
+        // Slight chance to gain TM/HM compatibility for a move if not learned by an earlier evolution step
+        // Without prefer same type: 25% chance
+        // With prefer same type:    10% chance, 90% chance for a type new to this evolution
+        const move = moveIDs[i - 1];
+        const mv = moveData[move]!;
+        let probability = 0.25;
+        if (preferSameType) {
+          probability = 0.1;
+          if (
+            (evTo.primaryType === mv.type &&
+              evTo.primaryType !== evFrom.primaryType &&
+              evTo.primaryType !== evFrom.secondaryType) ||
+            (evTo.secondaryType != null &&
+              evTo.secondaryType === mv.type &&
+              evTo.secondaryType !== evFrom.secondaryType &&
+              evTo.secondaryType !== evFrom.primaryType)
+          ) {
+            probability = 0.9;
+          }
+        }
+        toCompatibilityFlags[i] = this.random.nextDouble() < probability;
+      } else {
+        toCompatibilityFlags[i] = prevCompatibilityFlags[i];
+      }
+    }
+  }
+
+  private getMoveCompatibilityProbability(
+    pkmn: Pokemon,
+    mv: Move,
+    requiredEarlyOn: boolean,
+    preferSameType: boolean
+  ): number {
+    let probability = 0.5;
+    if (preferSameType) {
+      if (
+        pkmn.primaryType === mv.type ||
+        (pkmn.secondaryType != null && pkmn.secondaryType === mv.type)
+      ) {
+        probability = 0.9;
+      } else if (mv.type != null && mv.type === Type.NORMAL) {
+        probability = 0.5;
+      } else {
+        probability = 0.25;
+      }
+    }
+    if (requiredEarlyOn) {
+      probability = Math.min(1.0, probability * 1.8);
+    }
+    return probability;
+  }
+
+  fullTMHMCompatibility(): void {
+    const compat = this.getTMHMCompatibility();
+    for (const flags of compat.values()) {
+      for (let i = 1; i < flags.length; i++) {
+        flags[i] = true;
+      }
+    }
+    this.setTMHMCompatibility(compat);
+  }
+
+  ensureTMCompatSanity(): void {
+    // if a pokemon learns a move in its moveset
+    // and there is a TM of that move, make sure
+    // that TM can be learned.
+    const compat = this.getTMHMCompatibility();
+    const movesets = this.getMovesLearnt();
+    const tmMoves = this.getTMMoves();
+    for (const [pkmn, pkmnCompat] of compat) {
+      const moveset = movesets.get(pkmn.number);
+      if (moveset) {
+        for (const ml of moveset) {
+          const tmIndex = tmMoves.indexOf(ml.move);
+          if (tmIndex >= 0) {
+            pkmnCompat[tmIndex + 1] = true;
+          }
+        }
+      }
+    }
+    this.setTMHMCompatibility(compat);
+  }
+
+  ensureTMEvolutionSanity(): void {
+    const compat = this.getTMHMCompatibility();
+    // Don't do anything with the base, just copy upwards to ensure later evolutions retain learn compatibility
+    this.copyUpEvolutionsHelper4(
+      (_pk: Pokemon) => {},
+      (evFrom: Pokemon, evTo: Pokemon, _toMonIsFinalEvo: boolean) => {
+        const fromCompat = compat.get(evFrom)!;
+        const toCompat = compat.get(evTo)!;
+        for (let i = 1; i < toCompat.length; i++) {
+          toCompat[i] = toCompat[i] || fromCompat[i];
+        }
+      },
+      null,
+      true
+    );
+    this.setTMHMCompatibility(compat);
+  }
+
+  fullHMCompatibility(): void {
+    const compat = this.getTMHMCompatibility();
+    const tmCount = this.getTMCount();
+    for (const flags of compat.values()) {
+      for (let i = tmCount + 1; i < flags.length; i++) {
+        flags[i] = true;
+      }
+    }
+    // Set the new compatibility
+    this.setTMHMCompatibility(compat);
+  }
+
+  copyTMCompatibilityToCosmeticFormes(): void {
+    const compat = this.getTMHMCompatibility();
+    for (const [pkmn, flags] of compat) {
+      if (pkmn.actuallyCosmetic) {
+        const baseFlags = compat.get(pkmn.baseForme!)!;
+        for (let i = 1; i < flags.length; i++) {
+          flags[i] = baseFlags[i];
+        }
+      }
+    }
+    this.setTMHMCompatibility(compat);
+  }
   abstract hasMoveTutors(): boolean;
   abstract getMoveTutorMoves(): number[];
   abstract setMoveTutorMoves(moves: number[]): void;
@@ -2792,12 +4200,208 @@ export abstract class AbstractRomHandler implements RomHandler {
   abstract setTrainerNames(trainerNames: string[]): void;
   abstract trainerNameMode(): TrainerNameMode;
   abstract getTCNameLengthsByTrainer(): number[];
-  abstract randomizeTrainerNames(settings: Settings): void;
+  randomizeTrainerNames(settings: Settings): void {
+    const customNames = settings.customNames;
+
+    if (!this.canChangeTrainerText()) {
+      return;
+    }
+
+    // index 0 = singles, 1 = doubles
+    const allTrainerNames: string[][] = [[], []];
+    const trainerNamesByLength: Map<number, string[]>[] = [new Map(), new Map()];
+
+    const repeatedTrainerNames = ["GRUNT", "EXECUTIVE", "SHADOW", "ADMIN", "GOON", "EMPLOYEE"];
+
+    // Read name lists
+    for (const trainername of customNames.getTrainerNames()) {
+      const len = this.internalStringLength(trainername);
+      if (len <= 10) {
+        allTrainerNames[0].push(trainername);
+        if (trainerNamesByLength[0].has(len)) {
+          trainerNamesByLength[0].get(len)!.push(trainername);
+        } else {
+          trainerNamesByLength[0].set(len, [trainername]);
+        }
+      }
+    }
+
+    for (const trainername of customNames.getDoublesTrainerNames()) {
+      const len = this.internalStringLength(trainername);
+      if (len <= 10) {
+        allTrainerNames[1].push(trainername);
+        if (trainerNamesByLength[1].has(len)) {
+          trainerNamesByLength[1].get(len)!.push(trainername);
+        } else {
+          trainerNamesByLength[1].set(len, [trainername]);
+        }
+      }
+    }
+
+    // Get the current trainer names data
+    const currentTrainerNames = this.getTrainerNames();
+    if (currentTrainerNames.length === 0) {
+      // RBY have no trainer names
+      return;
+    }
+    const mode = this.trainerNameMode();
+    const maxLength = this.maxTrainerNameLength();
+    const totalMaxLength = this.maxSumOfTrainerNameLengths();
+
+    let success = false;
+    let tries = 0;
+
+    // Init the translation map and new list
+    const translation = new Map<string, string>();
+    let newTrainerNames: string[] = [];
+    const tcNameLengths = this.getTCNameLengthsByTrainer();
+
+    // loop until we successfully pick names that fit
+    while (!success && tries < 10000) {
+      success = true;
+      translation.clear();
+      newTrainerNames = [];
+      let totalLength = 0;
+
+      let tnIndex = -1;
+      for (const trainerName of currentTrainerNames) {
+        tnIndex++;
+        if (translation.has(trainerName) && !repeatedTrainerNames.includes(trainerName.toUpperCase())) {
+          const translated = translation.get(trainerName)!;
+          newTrainerNames.push(translated);
+          totalLength += this.internalStringLength(translated);
+        } else {
+          const idx = trainerName.includes("&") ? 1 : 0;
+          let pickFrom: string[] | undefined = allTrainerNames[idx];
+          const intStrLen = this.internalStringLength(trainerName);
+          if (mode === TrainerNameMode.SAME_LENGTH) {
+            pickFrom = trainerNamesByLength[idx].get(intStrLen);
+          }
+          let changeTo = trainerName;
+          let ctl = intStrLen;
+          if (pickFrom != null && pickFrom.length > 0 && intStrLen > 0) {
+            let innerTries = 0;
+            changeTo = pickFrom[this.cosmeticRandom.nextInt(pickFrom.length)];
+            ctl = this.internalStringLength(changeTo);
+            while (
+              (mode === TrainerNameMode.MAX_LENGTH && ctl > maxLength) ||
+              (mode === TrainerNameMode.MAX_LENGTH_WITH_CLASS &&
+                ctl + (tcNameLengths[tnIndex] ?? 0) > maxLength)
+            ) {
+              innerTries++;
+              if (innerTries === 100) {
+                changeTo = trainerName;
+                ctl = intStrLen;
+                break;
+              }
+              changeTo = pickFrom[this.cosmeticRandom.nextInt(pickFrom.length)];
+              ctl = this.internalStringLength(changeTo);
+            }
+          }
+          translation.set(trainerName, changeTo);
+          newTrainerNames.push(changeTo);
+          totalLength += ctl;
+        }
+
+        if (totalLength > totalMaxLength) {
+          success = false;
+          tries++;
+          break;
+        }
+      }
+    }
+
+    if (!success) {
+      throw new RandomizationException(
+        "Could not randomize trainer names in a reasonable amount of attempts." +
+          "\nPlease add some shorter names to your custom trainer names.",
+      );
+    }
+
+    // Done choosing, save
+    this.setTrainerNames(newTrainerNames);
+  }
 
   abstract getTrainerClassNames(): string[];
   abstract setTrainerClassNames(trainerClassNames: string[]): void;
   abstract fixedTrainerClassNamesLength(): boolean;
-  abstract randomizeTrainerClassNames(settings: Settings): void;
+  randomizeTrainerClassNames(settings: Settings): void {
+    const customNames = settings.customNames;
+
+    if (!this.canChangeTrainerText()) {
+      return;
+    }
+
+    // index 0 = singles, index 1 = doubles
+    const allTrainerClasses: string[][] = [[], []];
+    const trainerClassesByLength: Map<number, string[]>[] = [new Map(), new Map()];
+
+    // Read names data
+    for (const trainerClassName of customNames.getTrainerClasses()) {
+      allTrainerClasses[0].push(trainerClassName);
+      const len = this.internalStringLength(trainerClassName);
+      if (trainerClassesByLength[0].has(len)) {
+        trainerClassesByLength[0].get(len)!.push(trainerClassName);
+      } else {
+        trainerClassesByLength[0].set(len, [trainerClassName]);
+      }
+    }
+
+    for (const trainerClassName of customNames.getDoublesTrainerClasses()) {
+      allTrainerClasses[1].push(trainerClassName);
+      const len = this.internalStringLength(trainerClassName);
+      if (trainerClassesByLength[1].has(len)) {
+        trainerClassesByLength[1].get(len)!.push(trainerClassName);
+      } else {
+        trainerClassesByLength[1].set(len, [trainerClassName]);
+      }
+    }
+
+    // Get the current trainer names data
+    const currentClassNames = this.getTrainerClassNames();
+    const mustBeSameLength = this.fixedTrainerClassNamesLength();
+    const maxLength = this.maxTrainerClassNameLength();
+
+    // Init the translation map and new list
+    const translation = new Map<string, string>();
+    const newClassNames: string[] = [];
+
+    const numTrainerClasses = currentClassNames.length;
+    const doublesClasses = this.getDoublesTrainerClasses();
+
+    // Start choosing
+    for (let i = 0; i < numTrainerClasses; i++) {
+      const trainerClassName = currentClassNames[i];
+      if (translation.has(trainerClassName)) {
+        newClassNames.push(translation.get(trainerClassName)!);
+      } else {
+        const idx = doublesClasses.includes(i) ? 1 : 0;
+        let pickFrom: string[] | undefined = allTrainerClasses[idx];
+        const intStrLen = this.internalStringLength(trainerClassName);
+        if (mustBeSameLength) {
+          pickFrom = trainerClassesByLength[idx].get(intStrLen);
+        }
+        let changeTo = trainerClassName;
+        if (pickFrom != null && pickFrom.length > 0) {
+          changeTo = pickFrom[this.cosmeticRandom.nextInt(pickFrom.length)];
+          let safetyCounter = 0;
+          while (changeTo.length > maxLength && safetyCounter < 100) {
+            changeTo = pickFrom[this.cosmeticRandom.nextInt(pickFrom.length)];
+            safetyCounter++;
+          }
+          if (changeTo.length > maxLength) {
+            changeTo = trainerClassName;
+          }
+        }
+        translation.set(trainerClassName, changeTo);
+        newClassNames.push(changeTo);
+      }
+    }
+
+    // Done choosing, save
+    this.setTrainerClassNames(newClassNames);
+  }
+
   abstract getDoublesTrainerClasses(): number[];
 
   abstract getAllowedItems(): ItemList;
@@ -2813,35 +4417,373 @@ export abstract class AbstractRomHandler implements RomHandler {
   abstract setFieldTMs(fieldTMs: number[]): void;
   abstract getRegularFieldItems(): number[];
   abstract setRegularFieldItems(items: number[]): void;
-  abstract shuffleFieldItems(): void;
-  abstract randomizeFieldItems(settings: Settings): void;
+  shuffleFieldItems(): void {
+    const currentItems = this.getRegularFieldItems();
+    const currentTMs = this.getCurrentFieldTMs();
+
+    this.shuffleArray(currentItems);
+    this.shuffleArray(currentTMs);
+
+    this.setRegularFieldItems(currentItems);
+    this.setFieldTMs(currentTMs);
+  }
+
+  randomizeFieldItems(settings: Settings): void {
+    const banBadItems = settings.banBadRandomFieldItems;
+    const distributeItemsControl =
+      settings.fieldItemsMod === FieldItemsMod.RANDOM_EVEN;
+    const uniqueItems = !settings.balanceShopPrices;
+
+    const possibleItems = banBadItems
+      ? this.getNonBadItems().copy()
+      : this.getAllowedItems().copy();
+    const currentItems = this.getRegularFieldItems();
+    const currentTMs = this.getCurrentFieldTMs();
+    const requiredTMs = this.getRequiredFieldTMs();
+    const uniqueNoSellItems = this.getUniqueNoSellItems();
+
+    const fieldItemCount = currentItems.length;
+    const fieldTMCount = currentTMs.length;
+    const reqTMCount = requiredTMs.length;
+    const totalTMCount = this.getTMCount();
+
+    const newItems: number[] = [];
+    const newTMs: number[] = [...requiredTMs];
+
+    const rng = () => this.random.nextDouble();
+
+    if (distributeItemsControl) {
+      for (let i = 0; i < fieldItemCount; i++) {
+        let chosenItem = possibleItems.randomNonTM(rng);
+        let iterNum = 0;
+        while (
+          this.getItemPlacementHistory(chosenItem) >
+            this.getItemPlacementAverage() &&
+          iterNum < 100
+        ) {
+          chosenItem = possibleItems.randomNonTM(rng);
+          iterNum++;
+        }
+        newItems.push(chosenItem);
+        if (uniqueItems && uniqueNoSellItems.includes(chosenItem)) {
+          possibleItems.banSingles(chosenItem);
+        } else {
+          this.setItemPlacementHistory(chosenItem);
+        }
+      }
+    } else {
+      for (let i = 0; i < fieldItemCount; i++) {
+        const chosenItem = possibleItems.randomNonTM(rng);
+        newItems.push(chosenItem);
+        if (uniqueItems && uniqueNoSellItems.includes(chosenItem)) {
+          possibleItems.banSingles(chosenItem);
+        }
+      }
+    }
+
+    for (let i = reqTMCount; i < fieldTMCount; i++) {
+      while (true) {
+        const tm = this.random.nextInt(totalTMCount) + 1;
+        if (!newTMs.includes(tm)) {
+          newTMs.push(tm);
+          break;
+        }
+      }
+    }
+
+    this.shuffleArray(newItems);
+    this.shuffleArray(newTMs);
+
+    this.setRegularFieldItems(newItems);
+    this.setFieldTMs(newTMs);
+  }
 
   abstract hasShopRandomization(): boolean;
-  abstract shuffleShopItems(): void;
-  abstract randomizeShopItems(settings: Settings): void;
+
+  shuffleShopItems(): void {
+    const currentItems = this.getShopItems();
+    if (currentItems == null || currentItems.size === 0) return;
+
+    const itemList: number[] = [];
+    for (const shop of currentItems.values()) {
+      if (shop.items) {
+        itemList.push(...shop.items);
+      }
+    }
+    this.shuffleArray(itemList);
+
+    let idx = 0;
+    for (const shop of currentItems.values()) {
+      if (shop.items) {
+        for (let i = 0; i < shop.items.length; i++) {
+          shop.items[i] = itemList[idx++];
+        }
+      }
+    }
+
+    this.setShopItems(currentItems);
+  }
+
+  randomizeShopItems(settings: Settings): void {
+    const banBadItems = settings.banBadRandomShopItems;
+    const banRegularShopItems = settings.banRegularShopItems;
+    const banOPShopItems = settings.banOPShopItems;
+    const balancePrices = settings.balanceShopPrices;
+    const placeEvolutionItems = settings.guaranteeEvolutionItems;
+    const placeXItems = settings.guaranteeXItems;
+
+    if (this.getShopItems() == null || this.getShopItems().size === 0) return;
+
+    const possibleItems = banBadItems
+      ? this.getNonBadItems()
+      : this.getAllowedItems();
+    if (banRegularShopItems) {
+      possibleItems.banSingles(...this.getRegularShopItems());
+    }
+    if (banOPShopItems) {
+      possibleItems.banSingles(...this.getOPShopItems());
+    }
+    const currentItems = this.getShopItems();
+
+    let shopItemCount = 0;
+    for (const shop of currentItems.values()) {
+      if (shop.items) {
+        shopItemCount += shop.items.length;
+      }
+    }
+
+    const newItems: number[] = [];
+    const newItemsMap = new Map<number, Shop>();
+    const rng = () => this.random.nextDouble();
+    const guaranteedItems: number[] = [];
+
+    if (placeEvolutionItems) {
+      guaranteedItems.push(...this.getEvolutionItems());
+    }
+    if (placeXItems) {
+      guaranteedItems.push(...this.getXItems());
+    }
+
+    if (placeEvolutionItems || placeXItems) {
+      newItems.push(...guaranteedItems);
+      shopItemCount = shopItemCount - newItems.length;
+
+      for (let i = 0; i < shopItemCount; i++) {
+        let newItem: number;
+        do {
+          newItem = possibleItems.randomNonTM(rng);
+        } while (newItems.includes(newItem));
+        newItems.push(newItem);
+      }
+
+      // Guarantee main-game
+      const mainGameShops: number[] = [];
+      const nonMainGameShops: number[] = [];
+      for (const [key, shop] of currentItems) {
+        if (shop.isMainGame) {
+          mainGameShops.push(key);
+        } else {
+          nonMainGameShops.push(key);
+        }
+      }
+
+      // Place items in non-main-game shops; skip over guaranteed items
+      this.shuffleArray(newItems);
+      for (const shopKey of nonMainGameShops) {
+        let j = 0;
+        const newShopItems: number[] = [];
+        const oldShop = currentItems.get(shopKey)!;
+        const oldItems = oldShop.items ?? [];
+        for (let _idx = 0; _idx < oldItems.length; _idx++) {
+          let item = newItems[j];
+          while (guaranteedItems.includes(item)) {
+            j++;
+            item = newItems[j];
+          }
+          newShopItems.push(item);
+          const removeIdx = newItems.indexOf(item);
+          if (removeIdx >= 0) newItems.splice(removeIdx, 1);
+        }
+        const shop = new Shop(oldShop);
+        shop.items = newShopItems;
+        newItemsMap.set(shopKey, shop);
+      }
+
+      // Place items in main-game shops
+      this.shuffleArray(newItems);
+      for (const shopKey of mainGameShops) {
+        const newShopItems: number[] = [];
+        const oldShop = currentItems.get(shopKey)!;
+        const oldItems = oldShop.items ?? [];
+        for (let _idx = 0; _idx < oldItems.length; _idx++) {
+          const item = newItems[0];
+          newShopItems.push(item);
+          newItems.splice(0, 1);
+        }
+        const shop = new Shop(oldShop);
+        shop.items = newShopItems;
+        newItemsMap.set(shopKey, shop);
+      }
+    } else {
+      for (let i = 0; i < shopItemCount; i++) {
+        let newItem: number;
+        do {
+          newItem = possibleItems.randomNonTM(rng);
+        } while (newItems.includes(newItem));
+        newItems.push(newItem);
+      }
+
+      let newItemIdx = 0;
+      for (const [key, oldShop] of currentItems) {
+        const newShopItems: number[] = [];
+        const oldItems = oldShop.items ?? [];
+        for (let _idx = 0; _idx < oldItems.length; _idx++) {
+          newShopItems.push(newItems[newItemIdx++]);
+        }
+        const shop = new Shop(oldShop);
+        shop.items = newShopItems;
+        newItemsMap.set(key, shop);
+      }
+    }
+
+    this.setShopItems(newItemsMap);
+    if (balancePrices) {
+      this.setShopPrices();
+    }
+  }
+
   abstract getShopItems(): Map<number, Shop>;
   abstract setShopItems(shopItems: Map<number, Shop>): void;
   abstract setShopPrices(): void;
 
-  abstract randomizePickupItems(settings: Settings): void;
+  // Gen1 has no pickup ability; subclasses with pickup override this.
+  randomizePickupItems(_settings: Settings): void {
+    // no-op by default
+  }
 
   abstract getIngameTrades(): IngameTrade[];
   abstract setIngameTrades(trades: IngameTrade[]): void;
-  abstract randomizeIngameTrades(settings: Settings): void;
+
+  randomizeIngameTrades(settings: Settings): void {
+    const randomizeRequest =
+      settings.inGameTradesMod ===
+      InGameTradesMod.RANDOMIZE_GIVEN_AND_REQUESTED;
+    const randomNickname = settings.randomizeInGameTradesNicknames;
+    const randomOT = settings.randomizeInGameTradesOTs;
+    const randomStats = settings.randomizeInGameTradesIVs;
+    const randomItem = settings.randomizeInGameTradesItems;
+    const customNames = settings.customNames;
+
+    this.checkPokemonRestrictions();
+
+    // Process trainer names
+    const trainerNames: string[] = [];
+    if (randomOT) {
+      const maxOT = this.maxTradeOTNameLength();
+      for (const trainername of customNames.getTrainerNames()) {
+        const len = this.internalStringLength(trainername);
+        if (len <= maxOT && !trainerNames.includes(trainername)) {
+          trainerNames.push(trainername);
+        }
+      }
+    }
+
+    // Process nicknames
+    const nicknames: string[] = [];
+    if (randomNickname) {
+      const maxNN = this.maxTradeNicknameLength();
+      for (const nickname of customNames.getPokemonNicknames()) {
+        const len = this.internalStringLength(nickname);
+        if (len <= maxNN && !nicknames.includes(nickname)) {
+          nicknames.push(nickname);
+        }
+      }
+    }
+
+    // get old trades
+    const trades = this.getIngameTrades();
+    const usedRequests: Pokemon[] = [];
+    const usedGivens: Pokemon[] = [];
+    const usedOTs: string[] = [];
+    const usedNicknames: string[] = [];
+    const possibleItems = this.getAllowedItems();
+
+    const nickCount = nicknames.length;
+    const trnameCount = trainerNames.length;
+
+    for (const trade of trades) {
+      // pick new given pokemon
+      const oldgiven = trade.givenPokemon;
+      let given = this.randomPokemon();
+      while (usedGivens.includes(given)) {
+        given = this.randomPokemon();
+      }
+      usedGivens.push(given);
+      trade.givenPokemon = given;
+
+      // requested pokemon?
+      if (oldgiven === trade.requestedPokemon) {
+        // preserve trades for the same pokemon
+        trade.requestedPokemon = given;
+      } else if (randomizeRequest) {
+        if (trade.requestedPokemon != null) {
+          let request = this.randomPokemon();
+          while (usedRequests.includes(request) || request === given) {
+            request = this.randomPokemon();
+          }
+          usedRequests.push(request);
+          trade.requestedPokemon = request;
+        }
+      }
+
+      // nickname?
+      if (randomNickname && nickCount > usedNicknames.length) {
+        let nickname = nicknames[this.random.nextInt(nickCount)];
+        while (usedNicknames.includes(nickname)) {
+          nickname = nicknames[this.random.nextInt(nickCount)];
+        }
+        usedNicknames.push(nickname);
+        trade.nickname = nickname;
+      } else if (
+        trade.nickname.toLowerCase() === oldgiven.name.toLowerCase()
+      ) {
+        // change the name for sanity
+        trade.nickname = trade.givenPokemon.name;
+      }
+
+      if (randomOT && trnameCount > usedOTs.length) {
+        let ot = trainerNames[this.random.nextInt(trnameCount)];
+        while (usedOTs.includes(ot)) {
+          ot = trainerNames[this.random.nextInt(trnameCount)];
+        }
+        usedOTs.push(ot);
+        trade.otName = ot;
+        trade.otId = this.random.nextInt(65536);
+      }
+
+      if (randomStats) {
+        const maxIV = this.hasDVs() ? 16 : 32;
+        for (let i = 0; i < trade.ivs.length; i++) {
+          trade.ivs[i] = this.random.nextInt(maxIV);
+        }
+      }
+
+      if (randomItem) {
+        trade.item = possibleItems.randomItem(
+          () => this.random.nextDouble(),
+        );
+      }
+    }
+
+    // things that the game doesn't support should just be ignored
+    this.setIngameTrades(trades);
+  }
+
   abstract hasDVs(): boolean;
 
   abstract removeImpossibleEvolutions(settings: Settings): void;
-  abstract condenseLevelEvolutions(
-    maxLevel: number,
-    maxIntermediateLevel: number
-  ): void;
   abstract makeEvolutionsEasier(settings: Settings): void;
   abstract removeTimeBasedEvolutions(): void;
-  abstract getImpossibleEvoUpdates(): Set<EvolutionUpdate>;
-  abstract getEasierEvoUpdates(): Set<EvolutionUpdate>;
-  abstract getTimeBasedEvoUpdates(): Set<EvolutionUpdate>;
-  abstract randomizeEvolutions(settings: Settings): void;
-  abstract randomizeEvolutionsEveryLevel(settings: Settings): void;
 
   abstract getFieldMoves(): number[];
   abstract getEarlyRequiredHMMoves(): number[];
@@ -2858,4 +4800,76 @@ export abstract class AbstractRomHandler implements RomHandler {
   abstract isEffectivenessUpdated(): boolean;
 
   abstract hasFunctionalFormes(): boolean;
+
+  // -- Move update helpers --
+
+  private updateMovePower(
+    moves: (Move | null)[],
+    moveNum: number,
+    power: number
+  ): void {
+    const mv = moves[moveNum];
+    if (mv != null && mv.power !== power) {
+      mv.power = power;
+      this.addMoveUpdate(moveNum, 0);
+    }
+  }
+
+  private updateMovePP(
+    moves: (Move | null)[],
+    moveNum: number,
+    pp: number
+  ): void {
+    const mv = moves[moveNum];
+    if (mv != null && mv.pp !== pp) {
+      mv.pp = pp;
+      this.addMoveUpdate(moveNum, 1);
+    }
+  }
+
+  private updateMoveAccuracy(
+    moves: (Move | null)[],
+    moveNum: number,
+    accuracy: number
+  ): void {
+    const mv = moves[moveNum];
+    if (mv != null && Math.abs(mv.hitratio - accuracy) >= 1) {
+      mv.hitratio = accuracy;
+      this.addMoveUpdate(moveNum, 2);
+    }
+  }
+
+  private updateMoveType(
+    moves: (Move | null)[],
+    moveNum: number,
+    type: Type
+  ): void {
+    const mv = moves[moveNum];
+    if (mv != null && mv.type !== type) {
+      mv.type = type;
+      this.addMoveUpdate(moveNum, 3);
+    }
+  }
+
+  private updateMoveCategory(
+    moves: (Move | null)[],
+    moveNum: number,
+    category: MoveCategory
+  ): void {
+    const mv = moves[moveNum];
+    if (mv != null && mv.category !== category) {
+      mv.category = category;
+      this.addMoveUpdate(moveNum, 4);
+    }
+  }
+
+  private addMoveUpdate(moveNum: number, updateType: number): void {
+    if (!this.moveUpdates.has(moveNum)) {
+      const updateField = [false, false, false, false, false];
+      updateField[updateType] = true;
+      this.moveUpdates.set(moveNum, updateField);
+    } else {
+      this.moveUpdates.get(moveNum)![updateType] = true;
+    }
+  }
 }

@@ -1,5 +1,6 @@
 import { ExpCurve, expCurveToByte, expCurveFromByte } from "../pokemon/exp-curve";
 import { GenRestrictions } from "../pokemon/gen-restrictions";
+import { CustomNamesSet } from "./custom-names-set";
 import { crc32 } from "../utils/crc32";
 import { FileFunctions } from "../utils/file-functions";
 import { Version } from "../utils/version";
@@ -315,6 +316,7 @@ export class Settings {
   updatedFromOldVersion: boolean = false;
   currentRestrictions: GenRestrictions | null = null;
   currentMiscTweaks: number = 0;
+  customNames: CustomNamesSet = new CustomNamesSet();
 
   changeImpossibleEvolutions: boolean = false;
   makeEvolutionsEasier: boolean = false;

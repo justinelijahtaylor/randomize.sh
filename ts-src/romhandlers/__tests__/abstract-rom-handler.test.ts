@@ -203,13 +203,7 @@ class MockRomHandler extends AbstractRomHandler {
   getHMCount() { return 0; }
   getTMHMCompatibility() { return new Map<Pokemon, boolean[]>(); }
   setTMHMCompatibility(_c: Map<Pokemon, boolean[]>) {}
-  randomizeTMHMCompatibility(_s: Settings) {}
-  fullTMHMCompatibility() {}
-  ensureTMCompatSanity() {}
-  ensureTMEvolutionSanity() {}
-  fullHMCompatibility() {}
-
-  copyTMCompatibilityToCosmeticFormes() {}
+  // TM/HM compatibility methods inherited from AbstractRomHandler
   hasMoveTutors() { return false; }
   getMoveTutorMoves() { return []; }
   setMoveTutorMoves(_m: number[]) {}
@@ -262,7 +256,6 @@ class MockRomHandler extends AbstractRomHandler {
 
   getIngameTrades() { return []; }
   setIngameTrades(_t: IngameTrade[]) {}
-  randomizeIngameTrades(_s: Settings) {}
   hasDVs() { return false; }
 
   removeImpossibleEvolutions(_s: Settings) {}
