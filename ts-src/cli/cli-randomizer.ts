@@ -248,7 +248,12 @@ export function performDirectRandomization(
       stderr,
     );
   } catch (e) {
-    stderr(String(e));
+    if (e instanceof Error) {
+      stderr(e.message);
+      stderr(e.stack ?? '');
+    } else {
+      stderr(String(e));
+    }
   }
   return false;
 }

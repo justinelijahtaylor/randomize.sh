@@ -1504,6 +1504,7 @@ export abstract class AbstractRomHandler implements RomHandler {
           alreadyPicked = [];
         } else {
           strongerMoves = strongerMoves.filter(m => !alreadyPicked.includes(m));
+          if (strongerMoves.length === 0) break;
         }
         const extraMove = strongerMoves[this.random.nextInt(strongerMoves.length)];
         avg = (avg * typeMoves.length + extraMove.power * extraMove.hitCount) / (typeMoves.length + 1);
@@ -1520,6 +1521,7 @@ export abstract class AbstractRomHandler implements RomHandler {
           alreadyPicked = [];
         } else {
           weakerMoves = weakerMoves.filter(m => !alreadyPicked.includes(m));
+          if (weakerMoves.length === 0) break;
         }
         const extraMove = weakerMoves[this.random.nextInt(weakerMoves.length)];
         avg = (avg * typeMoves.length + extraMove.power * extraMove.hitCount) / (typeMoves.length + 1);
@@ -2761,7 +2763,97 @@ export abstract class AbstractRomHandler implements RomHandler {
   abstract getTMMoves(): number[];
   abstract getHMMoves(): number[];
   abstract setTMMoves(moveIndexes: number[]): void;
-  abstract randomizeTMMoves(settings: Settings): void;
+  randomizeTMMoves(settings: Settings): void {
+    const noBroken = settings.blockBrokenTMMoves;
+    const preserveField = settings.keepFieldMoveTMs;
+    const goodDamagingPercentage = settings.tmsForceGoodDamaging
+      ? settings.tmsGoodDamagingPercent / 100.0
+      : 0;
+
+    const tmCount = this.getTMCount();
+    const allMoves = this.getMoves();
+    const hms = this.getHMMoves();
+    const oldTMs = this.getTMMoves();
+
+    const banned = new Set<number>(noBroken ? this.getGameBreakingMoves() : []);
+    for (const b of this.getMovesBannedFromLevelup()) banned.add(b);
+    for (const il of this.getIllegalMoves()) banned.add(il);
+
+    // field moves?
+    const fieldMoves = this.getFieldMoves();
+    let preservedFieldMoveCount = 0;
+
+    if (preserveField) {
+      const existingFieldTMs = oldTMs.filter((tm) => fieldMoves.includes(tm));
+      preservedFieldMoveCount = existingFieldTMs.length;
+      for (const fm of existingFieldTMs) banned.add(fm);
+    }
+
+    // Determine which moves are pickable
+    const usableMoves: Move[] = [];
+    const usableDamagingMoves: Move[] = [];
+
+    for (let i = 1; i < allMoves.length; i++) {
+      const mv = allMoves[i];
+      if (mv == null) continue;
+      if (
+        GlobalConstants.bannedRandomMoves[mv.number] ||
+        GlobalConstants.zMoves.includes(mv.number) ||
+        hms.includes(mv.number) ||
+        banned.has(mv.number)
+      ) {
+        continue;
+      }
+      usableMoves.push(mv);
+      if (
+        !GlobalConstants.bannedForDamagingMove[mv.number] &&
+        mv.isGoodDamaging(this.perfectAccuracy)
+      ) {
+        usableDamagingMoves.push(mv);
+      }
+    }
+
+    // pick (tmCount - preservedFieldMoveCount) moves
+    const pickedMoves: number[] = [];
+    let goodDamagingLeft = Math.round(
+      goodDamagingPercentage * (tmCount - preservedFieldMoveCount)
+    );
+
+    for (let i = 0; i < tmCount - preservedFieldMoveCount; i++) {
+      let chosenMove: Move;
+      if (goodDamagingLeft > 0 && usableDamagingMoves.length > 0) {
+        const idx = this.random.nextInt(usableDamagingMoves.length);
+        chosenMove = usableDamagingMoves[idx];
+      } else {
+        const idx = this.random.nextInt(usableMoves.length);
+        chosenMove = usableMoves[idx];
+      }
+      pickedMoves.push(chosenMove.number);
+      // Remove from both lists
+      const uIdx = usableMoves.indexOf(chosenMove);
+      if (uIdx >= 0) usableMoves.splice(uIdx, 1);
+      const dIdx = usableDamagingMoves.indexOf(chosenMove);
+      if (dIdx >= 0) usableDamagingMoves.splice(dIdx, 1);
+      goodDamagingLeft--;
+    }
+
+    // shuffle picked moves to avoid bias from goodDamagingPercentage
+    this.shuffleArray(pickedMoves);
+
+    // distribute as TMs
+    let pickedMoveIndex = 0;
+    const newTMs: number[] = [];
+
+    for (let i = 0; i < tmCount; i++) {
+      if (preserveField && fieldMoves.includes(oldTMs[i])) {
+        newTMs.push(oldTMs[i]);
+      } else {
+        newTMs.push(pickedMoves[pickedMoveIndex++]);
+      }
+    }
+
+    this.setTMMoves(newTMs);
+  }
   abstract getTMCount(): number;
   abstract getHMCount(): number;
   abstract getTMHMCompatibility(): Map<Pokemon, boolean[]>;
