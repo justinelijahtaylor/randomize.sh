@@ -1207,11 +1207,8 @@ export class Gen1RomHandler extends AbstractGBCRomHandler {
     this.setGen1EncountersImpl(encounters);
   }
 
-  randomEncounters(_settings: Settings): void {}
-
-  area1to1Encounters(_settings: Settings): void {}
-
-  game1to1Encounters(_settings: Settings): void {}
+  // randomEncounters, area1to1Encounters, and game1to1Encounters
+  // are now concrete methods in AbstractRomHandler
 
   randomizeWildHeldItems(_settings: Settings): void {}
 
@@ -1235,19 +1232,9 @@ export class Gen1RomHandler extends AbstractGBCRomHandler {
     this.setGen1TrainersImpl(trainerData);
   }
 
-  randomizeTrainerPokes(_settings: Settings): void {}
-
-  randomizeTrainerHeldItems(_settings: Settings): void {}
-
-  rivalCarriesStarter(): void {}
-
-  forceFullyEvolvedTrainerPokes(_settings: Settings): void {}
-
-  onlyChangeTrainerLevels(_settings: Settings): void {}
-
-  addTrainerPokemon(_settings: Settings): void {}
-
-  doubleBattleMode(): void {}
+  // randomizeTrainerPokes, randomizeTrainerHeldItems, rivalCarriesStarter,
+  // forceFullyEvolvedTrainerPokes, onlyChangeTrainerLevels, addTrainerPokemon,
+  // doubleBattleMode are now concrete in AbstractRomHandler
 
   getMoveSelectionPoolAtLevel(
     _tp: TrainerPokemon,
@@ -2919,8 +2906,8 @@ export function parseGen1OffsetsIni(text: string): RomEntry[] {
         // ignored for now
       } else if (key.endsWith('Tweak') || key.endsWith('tweak')) {
         current.tweakFiles.set(key, value);
-      } else if (key.endsWith('[]')) {
-        const arrayKey = key.substring(0, key.length - 2);
+      } else if (key.endsWith('[]') || (value.startsWith('[') && value.endsWith(']') && !key.includes('{}'))) {
+        const arrayKey = key.endsWith('[]') ? key.substring(0, key.length - 2) : key;
         if (value.startsWith('[') && value.endsWith(']')) {
           const inner = value.substring(1, value.length - 1);
           const nums = inner.split(',').map((s) => parseIniInt(s.trim()));
