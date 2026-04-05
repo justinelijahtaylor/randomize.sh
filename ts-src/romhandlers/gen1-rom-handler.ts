@@ -49,6 +49,7 @@ import { IngameTrade } from '../pokemon/ingame-trade';
 import { Shop } from '../pokemon/shop';
 import type { EvolutionUpdate } from './evolution-update';
 import { FileFunctions } from '../utils/file-functions';
+import { RomFunctions } from '../utils/rom-functions';
 import { Effectiveness } from '../pokemon/effectiveness';
 import { Evolution } from '../pokemon/evolution';
 import {
@@ -1222,7 +1223,7 @@ export class Gen1RomHandler extends AbstractGBCRomHandler {
     return [];
   }
 
-  standardizeEXPCurves(_settings: Settings): void {}
+  // standardizeEXPCurves is now a concrete method in AbstractRomHandler
 
   getEncounters(_useTimeOfDay: boolean): EncounterSet[] {
     return this.getGen1EncountersImpl();
@@ -1240,14 +1241,23 @@ export class Gen1RomHandler extends AbstractGBCRomHandler {
 
   randomizeWildHeldItems(_settings: Settings): void {}
 
-  changeCatchRates(_settings: Settings): void {}
+  // changeCatchRates and minimumCatchRate are now concrete methods in AbstractRomHandler
 
-  minimumCatchRate(
-    _rateNonLegendary: number,
-    _rateLegendary: number
-  ): void {}
+  enableGuaranteedPokemonCatching(): void {
+    const offset = Gen1RomHandler.find(this.rom, Gen1Constants.guaranteedCatchPrefix);
+    if (offset > 0) {
+      const patchOffset = offset + Gen1Constants.guaranteedCatchPrefix.length / 2;
 
-  enableGuaranteedPokemonCatching(): void {}
+      // The game ensures the Master Ball always catches by checking:
+      //   cp MASTER_BALL
+      //   jp z, .captured     (opcode 0xCA)
+      // By changing jp z (0xCA) to jp (0xC3), catching always succeeds
+      // regardless of ball type.
+      if (this.rom[patchOffset] === 0xCA) {
+        this.rom[patchOffset] = 0xC3;
+      }
+    }
+  }
 
   getTrainers(): Trainer[] {
     return this.getGen1TrainersImpl();
@@ -1271,15 +1281,9 @@ export class Gen1RomHandler extends AbstractGBCRomHandler {
     return [];
   }
 
-  pickTrainerMovesets(_settings: Settings): void {}
+  // pickTrainerMovesets is now concrete in AbstractRomHandler
 
-  updateMoves(_settings: Settings): void {}
-
-  initMoveUpdates(): void {}
-
-  getMoveUpdates(): Map<number, boolean[]> {
-    return new Map();
-  }
+  // updateMoves, initMoveUpdates, getMoveUpdates inherited from AbstractRomHandler
 
   getMovesLearnt(): Map<number, MoveLearnt[]> {
     return getGen1MovesLearnt(this.rom, this.romEntry, this.pokes, this.pokeRBYToNumTable, this.moveRomToNumTable);
@@ -1299,9 +1303,7 @@ export class Gen1RomHandler extends AbstractGBCRomHandler {
     // Gen 1 has no egg moves
   }
 
-  orderDamagingMovesByDamage(): void {}
-
-  metronomeOnlyMode(): void {}
+  // orderDamagingMovesByDamage, metronomeOnlyMode inherited from AbstractRomHandler
 
   getStaticPokemon(): StaticEncounter[] {
     return getGen1StaticPokemon(
@@ -1319,7 +1321,7 @@ export class Gen1RomHandler extends AbstractGBCRomHandler {
 
   // randomizeStaticPokemon inherited from AbstractRomHandler
 
-  onlyChangeStaticLevels(_settings: Settings): void {}
+  // onlyChangeStaticLevels inherited from AbstractRomHandler
 
   applyCorrectStaticMusic(
     _specialMusicStaticChanges: Map<number, number>
@@ -1353,17 +1355,7 @@ export class Gen1RomHandler extends AbstractGBCRomHandler {
     setGen1TMHMCompatibility(this.rom, this.romEntry, this.pokes, compatData);
   }
 
-  randomizeTMHMCompatibility(_settings: Settings): void {}
-
-  fullTMHMCompatibility(): void {}
-
-  ensureTMCompatSanity(): void {}
-
-  ensureTMEvolutionSanity(): void {}
-
-  fullHMCompatibility(): void {}
-
-  copyTMCompatibilityToCosmeticFormes(): void {}
+  // TM/HM compatibility methods inherited from AbstractRomHandler
 
   randomizeMoveTutorMoves(_settings: Settings): void {}
 
@@ -1412,7 +1404,7 @@ export class Gen1RomHandler extends AbstractGBCRomHandler {
     return [];
   }
 
-  randomizeTrainerNames(_settings: Settings): void {}
+  // randomizeTrainerNames is now concrete in AbstractRomHandler
 
   getTrainerClassNames(): string[] {
     const offsets = this.romEntry.arrayEntries.get('TrainerClassNamesOffsets');
@@ -1472,7 +1464,7 @@ export class Gen1RomHandler extends AbstractGBCRomHandler {
     }
   }
 
-  randomizeTrainerClassNames(_settings: Settings): void {}
+  // randomizeTrainerClassNames is now concrete in AbstractRomHandler
 
   getAllowedItems(): ItemList {
     return new ItemList(0);
@@ -1562,21 +1554,11 @@ export class Gen1RomHandler extends AbstractGBCRomHandler {
     return [];
   }
 
-  shuffleFieldItems(): void {}
-
-  randomizeFieldItems(_settings: Settings): void {}
-
-  shuffleShopItems(): void {}
-
-  randomizeShopItems(_settings: Settings): void {}
-
   getShopItems(): Map<number, Shop> {
     return new Map();
   }
 
   setShopItems(_shopItems: Map<number, Shop>): void {}
-
-  randomizePickupItems(_settings: Settings): void {}
 
   getIngameTrades(): IngameTrade[] {
     const trades: IngameTrade[] = [];
@@ -1632,34 +1614,28 @@ export class Gen1RomHandler extends AbstractGBCRomHandler {
     }
   }
 
-  randomizeIngameTrades(_settings: Settings): void {}
-
-  removeImpossibleEvolutions(_settings: Settings): void {}
-
-  condenseLevelEvolutions(
-    _maxLevel: number,
-    _maxIntermediateLevel: number
-  ): void {}
-
-  makeEvolutionsEasier(_settings: Settings): void {}
-
-  removeTimeBasedEvolutions(): void {}
-
-  getImpossibleEvoUpdates(): Set<EvolutionUpdate> {
-    return new Set();
+  removeImpossibleEvolutions(_settings: Settings): void {
+    // Gen 1: only regular trade evos - change them all to evolve at level 37
+    for (const pkmn of this.pokes) {
+      if (pkmn != null) {
+        for (const evo of pkmn.evolutionsFrom) {
+          if (evo.type === EvolutionType.TRADE) {
+            evo.type = EvolutionType.LEVEL;
+            evo.extraInfo = 37;
+            this.addEvoUpdateLevel(this.impossibleEvolutionUpdates, evo);
+          }
+        }
+      }
+    }
   }
 
-  getEasierEvoUpdates(): Set<EvolutionUpdate> {
-    return new Set();
+  makeEvolutionsEasier(_settings: Settings): void {
+    // No such thing in Gen 1
   }
 
-  getTimeBasedEvoUpdates(): Set<EvolutionUpdate> {
-    return new Set();
+  removeTimeBasedEvolutions(): void {
+    // No such thing in Gen 1
   }
-
-  randomizeEvolutions(_settings: Settings): void {}
-
-  randomizeEvolutionsEveryLevel(_settings: Settings): void {}
 
   randomizeIntroPokemon(): void {
     const introPokemon = this.pokeNumToRBYTable[this.randomPokemon().number];
@@ -1671,7 +1647,9 @@ export class Gen1RomHandler extends AbstractGBCRomHandler {
     return null;
   }
 
-  removeEvosForPokemonPool(): void {}
+  removeEvosForPokemonPool(): void {
+    // Gen 1 doesn't have this functionality
+  }
 
   writeCheckValueToROM(_value: number): void {}
 
@@ -2046,6 +2024,28 @@ export class Gen1RomHandler extends AbstractGBCRomHandler {
         this.rom[champRivalJump] = GBConstants.gbZ80Nop;
         this.rom[champRivalJump + 1] = GBConstants.gbZ80Nop;
       }
+    }
+  }
+
+  /**
+   * Search for a hex-string pattern in the ROM.
+   * Returns the offset if found uniquely, -1 if not found, -2 if not unique, -3 on error.
+   */
+  private static find(haystack: Uint8Array, hexString: string): number {
+    if (hexString.length % 2 !== 0) {
+      return -3; // error
+    }
+    const searchFor = new Uint8Array(hexString.length / 2);
+    for (let i = 0; i < searchFor.length; i++) {
+      searchFor[i] = parseInt(hexString.substring(i * 2, i * 2 + 2), 16);
+    }
+    const found = RomFunctions.search(haystack, searchFor);
+    if (found.length === 0) {
+      return -1; // not found
+    } else if (found.length > 1) {
+      return -2; // not unique
+    } else {
+      return found[0];
     }
   }
 }
