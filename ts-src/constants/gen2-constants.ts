@@ -217,8 +217,8 @@ export function typeToByte(type: string): number {
     }
 }
 
-let allowedItems: ItemList;
-let nonBadItems: ItemList;
+export let allowedItems: ItemList;
+export let nonBadItems: ItemList;
 
 setupAllowedItems();
 
