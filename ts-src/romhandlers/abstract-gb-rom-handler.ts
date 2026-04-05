@@ -5,6 +5,8 @@
  * Ported from AbstractGBRomHandler.java
  */
 
+import * as fs from "fs";
+import * as path from "path";
 import { AbstractRomHandler } from "./abstract-rom-handler";
 import type { LogStream } from "./rom-handler";
 import type { RandomInstance } from "../utils/random-source";
@@ -36,8 +38,11 @@ export abstract class AbstractGBRomHandler extends AbstractRomHandler {
 
   saveRomFile(filename: string, _seed: number): boolean {
     this.savingRom();
-    // In a real implementation, would write rom bytes to file
-    // For now, return true to indicate success
+    const dir = path.dirname(filename);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(filename, this.rom);
     return true;
   }
 
@@ -77,9 +82,9 @@ export abstract class AbstractGBRomHandler extends AbstractRomHandler {
   abstract loadedRom(): void;
   abstract savingRom(): void;
 
-  protected static loadFile(_filename: string): Uint8Array {
-    // Stub: in real implementation, reads from filesystem
-    return new Uint8Array(0);
+  protected static loadFile(filename: string): Uint8Array {
+    const buffer = fs.readFileSync(filename);
+    return new Uint8Array(buffer);
   }
 
   protected readByteIntoFlags(

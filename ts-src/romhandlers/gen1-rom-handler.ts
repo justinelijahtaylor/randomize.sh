@@ -9,6 +9,9 @@
  * Licensed under the terms of the GPL v3+.
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
 import { AbstractGBCRomHandler } from './abstract-gbc-rom-handler';
 import type { LogStream, RomHandler } from './rom-handler';
 import { TrainerNameMode, RomHandlerFactory } from './rom-handler';
@@ -36,9 +39,10 @@ import { MiscTweak } from '../utils/misc-tweak';
 import type { MegaEvolution } from '../pokemon/mega-evolution';
 import { MoveLearnt } from '../pokemon/move-learnt';
 import { RandomizationException } from '../exceptions';
-import type { Trainer } from '../pokemon/trainer';
-import type { TrainerPokemon } from '../pokemon/trainer-pokemon';
-import type { EncounterSet } from '../pokemon/encounter-set';
+import { Trainer } from '../pokemon/trainer';
+import { TrainerPokemon } from '../pokemon/trainer-pokemon';
+import { EncounterSet } from '../pokemon/encounter-set';
+import { Encounter } from '../pokemon/encounter';
 import { StaticEncounter } from '../pokemon/static-encounter';
 import type { TotemPokemon } from '../pokemon/totem-pokemon';
 import { IngameTrade } from '../pokemon/ingame-trade';
@@ -70,6 +74,8 @@ export interface RomEntry {
   arrayEntries: Map<string, number[]>;
   extraTypeLookup: Map<number, string>;
   extraTypeReverse: Map<string, number>;
+  staticPokemon: StaticPokemonEntry[];
+  ghostMarowakOffsets: number[];
 }
 
 export function createDefaultRomEntry(): RomEntry {
@@ -87,6 +93,8 @@ export function createDefaultRomEntry(): RomEntry {
     arrayEntries: new Map(),
     extraTypeLookup: new Map(),
     extraTypeReverse: new Map(),
+    staticPokemon: [],
+    ghostMarowakOffsets: [],
   };
 }
 
@@ -729,7 +737,7 @@ function loadMiscMoveInfoFromEffect(move: Move): void {
 export class Gen1RomHandler extends AbstractGBCRomHandler {
   private romEntry: RomEntry = createDefaultRomEntry();
   private pokemonList: (Pokemon | null)[] = [];
-  private pokes: (Pokemon | null)[] = [];
+  private pokes: Pokemon[] = [];
   private movesList: (Move | null)[] = [];
   private pokeNumToRBYTable: number[] = [];
   private pokeRBYToNumTable: number[] = [];
@@ -740,23 +748,127 @@ export class Gen1RomHandler extends AbstractGBCRomHandler {
   private effectivenessUpdated: boolean = false;
   private xAccNerfed: boolean = false;
   private itemNames: string[] = [];
+  private textTables: TextTables = createTextTables();
+  private dexMapping: PokedexMapping = { pokeNumToRBY: [], pokeRBYToNum: [], pokedexCount: 0 };
+  private romEntries: RomEntry[] = [];
+  private mapNames: string[] = [];
 
-  constructor(random: RandomInstance, logStream: LogStream | null) {
+  constructor(random: RandomInstance, logStream: LogStream | null, romEntries?: RomEntry[]) {
     super(random, logStream);
+    if (romEntries) {
+      this.romEntries = romEntries;
+    } else {
+      // Load from INI file
+      try {
+        const iniPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../src/com/dabomstew/pkrandom/config/gen1_offsets.ini');
+        if (fs.existsSync(iniPath)) {
+          const iniText = fs.readFileSync(iniPath, 'utf-8');
+          this.romEntries = parseGen1OffsetsIni(iniText);
+        }
+      } catch {
+        // Fall back to hardcoded entries
+        this.romEntries = knownGen1RomEntries;
+      }
+    }
   }
 
   // === AbstractGBRomHandler abstract methods ===
 
-  detectRom(_rom: Uint8Array): boolean {
-    return false;
+  detectRom(rom: Uint8Array): boolean {
+    return detectRomInner(rom, rom.length, this.romEntries);
   }
 
   loadedRom(): void {
-    // Stub
+    // Detect the ROM entry
+    const entry = checkRomEntry(this.rom, this.romEntries);
+    if (entry == null) {
+      throw new Error('Could not detect ROM entry');
+    }
+    this.romEntry = entry;
+
+    // Load text tables
+    this.clearTextTables();
+    this.textTables = createTextTables();
+    const configDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../src/com/dabomstew/pkrandom/config');
+
+    // Read base text table (rby_english for English ROMs)
+    const baseTableFile = entry.extraTableFile || 'rby_english';
+    const baseTablePath = path.join(configDir, baseTableFile + '.tbl');
+    if (fs.existsSync(baseTablePath)) {
+      const lines = fs.readFileSync(baseTablePath, 'utf-8').split('\n');
+      readTextTable(this.textTables, lines);
+      // Also populate the parent class text tables
+      this.readTextTable(baseTableFile);
+    }
+
+    // Load pokedex order
+    this.dexMapping = loadPokedexOrder(this.rom, this.romEntry);
+    this.pokeNumToRBYTable = this.dexMapping.pokeNumToRBY;
+    this.pokeRBYToNumTable = this.dexMapping.pokeRBYToNum;
+    this.pokedexCount = this.dexMapping.pokedexCount;
+
+    // Load Pokemon stats
+    this.pokes = loadAllPokemonStats(this.rom, this.romEntry, this.dexMapping, this.textTables);
+    populateEvolutions(this.rom, this.romEntry, this.pokes, this.dexMapping);
+
+    this.pokemonList = new Array(this.pokes.length).fill(null);
+    for (let i = 0; i < this.pokes.length; i++) {
+      this.pokemonList[i] = this.pokes[i] ?? null;
+    }
+
+    // Load moves
+    const moveResult = loadAllMoves(this.rom, this.romEntry, this.textTables);
+    this.movesList = moveResult.moves;
+    this.moveNumToRomTable = moveResult.moveNumToRomTable;
+    this.moveRomToNumTable = moveResult.moveRomToNumTable;
+
+    // Load item names
+    this.itemNames = getGen1ItemNames(this.rom, this.romEntry, this.textTables);
+
+    // Load map names (simplified -- use generic names)
+    this.loadMapNames();
+  }
+
+  private loadMapNames(): void {
+    this.mapNames = new Array(256).fill('');
+    for (let i = 0; i < 256; i++) {
+      this.mapNames[i] = 'Map ' + i;
+    }
+    // Try to load real map names from ROM
+    try {
+      const mapNameTableOffset = romEntryGetValue(this.romEntry, 'MapNameTableOffset');
+      if (mapNameTableOffset !== 0) {
+        const mapNameBank = bankOf(mapNameTableOffset);
+        let offset = mapNameTableOffset;
+        let mapIdx = 0;
+        // Read map name entries
+        while (mapIdx < 256 && offset < this.rom.length) {
+          const nameOffset = offset;
+          let name = '';
+          let c = this.rom[offset] & 0xFF;
+          if (c === 0x50 || c === 0x00) break; // terminator
+          while (c !== 0x50 && offset < this.rom.length && (offset - nameOffset) < 50) {
+            if (this.textTables.tb[c] != null) {
+              name += this.textTables.tb[c];
+            }
+            offset++;
+            c = this.rom[offset] & 0xFF;
+          }
+          if (c === 0x50) offset++;
+          if (name.length > 0) {
+            this.mapNames[mapIdx] = name;
+          }
+          mapIdx++;
+        }
+      }
+    } catch {
+      // Ignore map name loading errors -- generic names are fine
+    }
   }
 
   savingRom(): void {
-    // Stub
+    saveAllPokemonStats(this.rom, this.romEntry, this.pokes, this.dexMapping, this.textTables);
+    saveAllMoves(this.rom, this.romEntry, this.movesList);
   }
 
   // === TRIVIAL STUBS ===
@@ -1063,11 +1175,11 @@ export class Gen1RomHandler extends AbstractGBCRomHandler {
   }
 
   getStarters(): Pokemon[] {
-    return [];
+    return getGen1Starters(this.rom, this.romEntry, this.pokes, this.pokeRBYToNumTable);
   }
 
-  setStarters(_newStarters: Pokemon[]): boolean {
-    return false;
+  setStarters(newStarters: Pokemon[]): boolean {
+    return setGen1Starters(this.rom, this.romEntry, this.pokes, this.pokeNumToRBYTable, newStarters, this.textTables);
   }
 
   customStarters(_settings: Settings): void {}
@@ -1085,19 +1197,18 @@ export class Gen1RomHandler extends AbstractGBCRomHandler {
   standardizeEXPCurves(_settings: Settings): void {}
 
   getEncounters(_useTimeOfDay: boolean): EncounterSet[] {
-    return [];
+    return this.getGen1EncountersImpl();
   }
 
   setEncounters(
     _useTimeOfDay: boolean,
-    _encounters: EncounterSet[]
-  ): void {}
+    encounters: EncounterSet[]
+  ): void {
+    this.setGen1EncountersImpl(encounters);
+  }
 
-  randomEncounters(_settings: Settings): void {}
-
-  area1to1Encounters(_settings: Settings): void {}
-
-  game1to1Encounters(_settings: Settings): void {}
+  // randomEncounters, area1to1Encounters, and game1to1Encounters
+  // are now concrete methods in AbstractRomHandler
 
   randomizeWildHeldItems(_settings: Settings): void {}
 
@@ -1111,27 +1222,19 @@ export class Gen1RomHandler extends AbstractGBCRomHandler {
   enableGuaranteedPokemonCatching(): void {}
 
   getTrainers(): Trainer[] {
-    return [];
+    return this.getGen1TrainersImpl();
   }
 
   setTrainers(
-    _trainerData: Trainer[],
+    trainerData: Trainer[],
     _doubleBattleMode: boolean
-  ): void {}
+  ): void {
+    this.setGen1TrainersImpl(trainerData);
+  }
 
-  randomizeTrainerPokes(_settings: Settings): void {}
-
-  randomizeTrainerHeldItems(_settings: Settings): void {}
-
-  rivalCarriesStarter(): void {}
-
-  forceFullyEvolvedTrainerPokes(_settings: Settings): void {}
-
-  onlyChangeTrainerLevels(_settings: Settings): void {}
-
-  addTrainerPokemon(_settings: Settings): void {}
-
-  doubleBattleMode(): void {}
+  // randomizeTrainerPokes, randomizeTrainerHeldItems, rivalCarriesStarter,
+  // forceFullyEvolvedTrainerPokes, onlyChangeTrainerLevels, addTrainerPokemon,
+  // doubleBattleMode are now concrete in AbstractRomHandler
 
   getMoveSelectionPoolAtLevel(
     _tp: TrainerPokemon,
@@ -1151,10 +1254,16 @@ export class Gen1RomHandler extends AbstractGBCRomHandler {
   }
 
   getMovesLearnt(): Map<number, MoveLearnt[]> {
-    return new Map();
+    return getGen1MovesLearnt(this.rom, this.romEntry, this.pokes, this.pokeRBYToNumTable, this.moveRomToNumTable);
   }
 
-  setMovesLearnt(_movesets: Map<number, MoveLearnt[]>): void {}
+  setMovesLearnt(movesets: Map<number, MoveLearnt[]>): void {
+    writeGen1EvosAndMovesLearnt(
+      this.rom, this.romEntry, this.pokes,
+      this.pokeRBYToNumTable, this.pokeNumToRBYTable,
+      this.moveNumToRomTable, movesets, false,
+    );
+  }
 
   randomizeMovesLearnt(_settings: Settings): void {}
 
@@ -1165,15 +1274,17 @@ export class Gen1RomHandler extends AbstractGBCRomHandler {
   metronomeOnlyMode(): void {}
 
   getStaticPokemon(): StaticEncounter[] {
-    // Static Pokemon support requires staticPokemon entries in the ROM entry config.
-    // For now, return empty since those aren't parsed from INI yet.
-    // When staticPokemon entries are available, each has speciesOffsets and levelOffsets.
-    return [];
+    return getGen1StaticPokemon(
+      this.rom, this.romEntry, this.romEntry.staticPokemon,
+      this.pokemonList, this.pokeRBYToNumTable,
+    );
   }
 
-  setStaticPokemon(_staticPokemon: StaticEncounter[]): boolean {
-    // See getStaticPokemon() — requires staticPokemon config entries.
-    return false;
+  setStaticPokemon(staticPokemon: StaticEncounter[]): boolean {
+    return setGen1StaticPokemon(
+      this.rom, this.romEntry, this.romEntry.staticPokemon,
+      staticPokemon, this.pokeNumToRBYTable,
+    );
   }
 
   randomizeStaticPokemon(_settings: Settings): void {}
@@ -1191,22 +1302,26 @@ export class Gen1RomHandler extends AbstractGBCRomHandler {
   randomizeTotemPokemon(_settings: Settings): void {}
 
   getTMMoves(): number[] {
-    return [];
+    return getGen1TMMoves(this.rom, this.romEntry, this.moveRomToNumTable);
   }
 
   getHMMoves(): number[] {
-    return [];
+    return getGen1HMMoves(this.rom, this.romEntry, this.moveRomToNumTable);
   }
 
-  setTMMoves(_moveIndexes: number[]): void {}
+  setTMMoves(moveIndexes: number[]): void {
+    setGen1TMMoves(this.rom, this.romEntry, this.moveNumToRomTable, moveIndexes);
+  }
 
   randomizeTMMoves(_settings: Settings): void {}
 
   getTMHMCompatibility(): Map<Pokemon, boolean[]> {
-    return new Map();
+    return getGen1TMHMCompatibility(this.rom, this.romEntry, this.pokes, this.pokedexCount);
   }
 
-  setTMHMCompatibility(_compatData: Map<Pokemon, boolean[]>): void {}
+  setTMHMCompatibility(compatData: Map<Pokemon, boolean[]>): void {
+    setGen1TMHMCompatibility(this.rom, this.romEntry, this.pokes, compatData);
+  }
 
   randomizeTMHMCompatibility(_settings: Settings): void {}
 
@@ -1529,6 +1644,380 @@ export class Gen1RomHandler extends AbstractGBCRomHandler {
   removeEvosForPokemonPool(): void {}
 
   writeCheckValueToROM(_value: number): void {}
+
+  // === Encounter implementation ===
+
+  private getGen1EncountersImpl(): EncounterSet[] {
+    const encounters: EncounterSet[] = [];
+    const ghostMarowak = this.pokes[Species.marowak] ?? this.pokes[1];
+
+    // grass & water
+    const usedOffsets: number[] = [];
+    const tableOffset0 = romEntryGetValue(this.romEntry, 'WildPokemonTableOffset');
+    const tableBank = bankOf(tableOffset0);
+    let mapID = -1;
+    let tblOff = tableOffset0;
+
+    while (readWord(this.rom, tblOff) !== Gen1Constants.encounterTableEnd) {
+      mapID++;
+      const offset0 = calculateOffset(tableBank, readWord(this.rom, tblOff));
+      const rootOffset = offset0;
+      if (!usedOffsets.includes(offset0)) {
+        usedOffsets.push(offset0);
+        let offset = offset0;
+        for (let a = 0; a < 2; a++) {
+          const rate = this.rom[offset++] & 0xFF;
+          if (rate > 0) {
+            const thisSet = new EncounterSet();
+            thisSet.rate = rate;
+            thisSet.offset = rootOffset;
+            thisSet.displayName = (a === 1 ? 'Surfing' : 'Grass/Cave') + ' on ' + (this.mapNames[mapID] || ('Map ' + mapID));
+            if (mapID >= Gen1Constants.towerMapsStartIndex && mapID <= Gen1Constants.towerMapsEndIndex) {
+              thisSet.bannedPokemon.add(ghostMarowak);
+            }
+            for (let slot = 0; slot < Gen1Constants.encounterTableSize; slot++) {
+              const enc = new Encounter();
+              enc.level = this.rom[offset] & 0xFF;
+              const pkIdx = this.pokeRBYToNumTable[this.rom[offset + 1] & 0xFF] ?? 0;
+              enc.pokemon = pkIdx > 0 && pkIdx < this.pokes.length ? this.pokes[pkIdx] : this.pokes[1];
+              thisSet.encounters.push(enc);
+              offset += 2;
+            }
+            encounters.push(thisSet);
+          }
+        }
+      } else {
+        for (const es of encounters) {
+          if (es.offset === offset0) {
+            es.displayName = (es.displayName || '') + ', ' + (this.mapNames[mapID] || ('Map ' + mapID));
+          }
+        }
+      }
+      tblOff += 2;
+    }
+
+    // old rod
+    const oldRodOffset = romEntryGetValue(this.romEntry, 'OldRodOffset');
+    if (oldRodOffset !== 0) {
+      const oldRodSet = new EncounterSet();
+      oldRodSet.displayName = 'Old Rod Fishing';
+      const oldRodEnc = new Encounter();
+      oldRodEnc.level = this.rom[oldRodOffset + 2] & 0xFF;
+      const oldRodIdx = this.pokeRBYToNumTable[this.rom[oldRodOffset + 1] & 0xFF] ?? 0;
+      oldRodEnc.pokemon = oldRodIdx > 0 ? this.pokes[oldRodIdx] : this.pokes[1];
+      oldRodSet.encounters.push(oldRodEnc);
+      oldRodSet.bannedPokemon.add(ghostMarowak);
+      encounters.push(oldRodSet);
+    }
+
+    // good rod
+    const goodRodOffset = romEntryGetValue(this.romEntry, 'GoodRodOffset');
+    if (goodRodOffset !== 0) {
+      const goodRodSet = new EncounterSet();
+      goodRodSet.displayName = 'Good Rod Fishing';
+      for (let grSlot = 0; grSlot < 2; grSlot++) {
+        const enc = new Encounter();
+        enc.level = this.rom[goodRodOffset + grSlot * 2] & 0xFF;
+        const grIdx = this.pokeRBYToNumTable[this.rom[goodRodOffset + grSlot * 2 + 1] & 0xFF] ?? 0;
+        enc.pokemon = grIdx > 0 ? this.pokes[grIdx] : this.pokes[1];
+        goodRodSet.encounters.push(enc);
+      }
+      goodRodSet.bannedPokemon.add(ghostMarowak);
+      encounters.push(goodRodSet);
+    }
+
+    // super rod
+    const superRodTableOffset = romEntryGetValue(this.romEntry, 'SuperRodTableOffset');
+    if (superRodTableOffset !== 0) {
+      if (this.romEntry.isYellow) {
+        let srOff = superRodTableOffset;
+        while ((this.rom[srOff] & 0xFF) !== 0xFF) {
+          const map = this.rom[srOff++] & 0xFF;
+          const thisSet = new EncounterSet();
+          thisSet.displayName = 'Super Rod Fishing on ' + (this.mapNames[map] || ('Map ' + map));
+          for (let encN = 0; encN < Gen1Constants.yellowSuperRodTableSize; encN++) {
+            const enc = new Encounter();
+            enc.level = this.rom[srOff + 1] & 0xFF;
+            const srIdx = this.pokeRBYToNumTable[this.rom[srOff] & 0xFF] ?? 0;
+            enc.pokemon = srIdx > 0 ? this.pokes[srIdx] : this.pokes[1];
+            thisSet.encounters.push(enc);
+            srOff += 2;
+          }
+          thisSet.bannedPokemon.add(ghostMarowak);
+          encounters.push(thisSet);
+        }
+      } else {
+        let srOff = superRodTableOffset;
+        const srBank = bankOf(superRodTableOffset);
+        const usedSROffsets: number[] = [];
+        while ((this.rom[srOff] & 0xFF) !== 0xFF) {
+          const map = this.rom[srOff++] & 0xFF;
+          const setOffset = calculateOffset(srBank, readWord(this.rom, srOff));
+          srOff += 2;
+          if (!usedSROffsets.includes(setOffset)) {
+            usedSROffsets.push(setOffset);
+            const thisSet = new EncounterSet();
+            thisSet.displayName = 'Super Rod Fishing on ' + (this.mapNames[map] || ('Map ' + map));
+            thisSet.offset = setOffset;
+            let so = setOffset;
+            const pokesInSet = this.rom[so++] & 0xFF;
+            for (let encN = 0; encN < pokesInSet; encN++) {
+              const enc = new Encounter();
+              enc.level = this.rom[so] & 0xFF;
+              const sIdx = this.pokeRBYToNumTable[this.rom[so + 1] & 0xFF] ?? 0;
+              enc.pokemon = sIdx > 0 ? this.pokes[sIdx] : this.pokes[1];
+              thisSet.encounters.push(enc);
+              so += 2;
+            }
+            thisSet.bannedPokemon.add(ghostMarowak);
+            encounters.push(thisSet);
+          } else {
+            for (const es of encounters) {
+              if (es.offset === setOffset) {
+                es.displayName = (es.displayName || '') + ', ' + (this.mapNames[map] || ('Map ' + map));
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return encounters;
+  }
+
+  private setGen1EncountersImpl(encounters: EncounterSet[]): void {
+    let encIdx = 0;
+
+    // grass & water
+    const usedOffsets: number[] = [];
+    const tableOffset0 = romEntryGetValue(this.romEntry, 'WildPokemonTableOffset');
+    const tableBank = bankOf(tableOffset0);
+    let tblOff = tableOffset0;
+
+    while (readWord(this.rom, tblOff) !== Gen1Constants.encounterTableEnd) {
+      const offset0 = calculateOffset(tableBank, readWord(this.rom, tblOff));
+      if (!usedOffsets.includes(offset0)) {
+        usedOffsets.push(offset0);
+        let offset = offset0;
+        for (let a = 0; a < 2; a++) {
+          const rate = this.rom[offset++] & 0xFF;
+          if (rate > 0) {
+            const thisSet = encounters[encIdx++];
+            for (let slot = 0; slot < Gen1Constants.encounterTableSize; slot++) {
+              const enc = thisSet.encounters[slot];
+              this.rom[offset] = enc.level & 0xFF;
+              this.rom[offset + 1] = this.pokeNumToRBYTable[enc.pokemon!.number] & 0xFF;
+              offset += 2;
+            }
+          }
+        }
+      }
+      tblOff += 2;
+    }
+
+    // old rod
+    const oldRodOffset = romEntryGetValue(this.romEntry, 'OldRodOffset');
+    if (oldRodOffset !== 0) {
+      const oldRodSet = encounters[encIdx++];
+      const oldRodEnc = oldRodSet.encounters[0];
+      this.rom[oldRodOffset + 2] = oldRodEnc.level & 0xFF;
+      this.rom[oldRodOffset + 1] = this.pokeNumToRBYTable[oldRodEnc.pokemon!.number] & 0xFF;
+    }
+
+    // good rod
+    const goodRodOffset = romEntryGetValue(this.romEntry, 'GoodRodOffset');
+    if (goodRodOffset !== 0) {
+      const goodRodSet = encounters[encIdx++];
+      for (let grSlot = 0; grSlot < 2; grSlot++) {
+        const enc = goodRodSet.encounters[grSlot];
+        this.rom[goodRodOffset + grSlot * 2] = enc.level & 0xFF;
+        this.rom[goodRodOffset + grSlot * 2 + 1] = this.pokeNumToRBYTable[enc.pokemon!.number] & 0xFF;
+      }
+    }
+
+    // super rod
+    const superRodTableOffset = romEntryGetValue(this.romEntry, 'SuperRodTableOffset');
+    if (superRodTableOffset !== 0) {
+      if (this.romEntry.isYellow) {
+        let srOff = superRodTableOffset;
+        while ((this.rom[srOff] & 0xFF) !== 0xFF) {
+          srOff++;
+          const thisSet = encounters[encIdx++];
+          for (let encN = 0; encN < Gen1Constants.yellowSuperRodTableSize; encN++) {
+            const enc = thisSet.encounters[encN];
+            this.rom[srOff + 1] = enc.level & 0xFF;
+            this.rom[srOff] = this.pokeNumToRBYTable[enc.pokemon!.number] & 0xFF;
+            srOff += 2;
+          }
+        }
+      } else {
+        let srOff = superRodTableOffset;
+        const srBank = bankOf(superRodTableOffset);
+        const usedSROffsets: number[] = [];
+        while ((this.rom[srOff] & 0xFF) !== 0xFF) {
+          srOff++;
+          const setOffset = calculateOffset(srBank, readWord(this.rom, srOff));
+          srOff += 2;
+          if (!usedSROffsets.includes(setOffset)) {
+            usedSROffsets.push(setOffset);
+            let so = setOffset;
+            const pokesInSet = this.rom[so++] & 0xFF;
+            const thisSet = encounters[encIdx++];
+            for (let encN = 0; encN < pokesInSet; encN++) {
+              const enc = thisSet.encounters[encN];
+              this.rom[so] = enc.level & 0xFF;
+              this.rom[so + 1] = this.pokeNumToRBYTable[enc.pokemon!.number] & 0xFF;
+              so += 2;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // === Trainer implementation ===
+
+  private getTrainerClassesForText(): string[] {
+    const tcnames: string[] = [];
+    const offsets = this.romEntry.arrayEntries.get('TrainerClassNamesOffsets');
+    if (!offsets || offsets.length === 0) {
+      for (let i = 0; i < Gen1Constants.trainerClassCount; i++) {
+        tcnames.push('Trainer Class ' + i);
+      }
+      return tcnames;
+    }
+    // Use the last offset (which is the "real" class names list)
+    let offset = offsets[offsets.length - 1];
+    for (let j = 0; j < Gen1Constants.tclassesCounts[offsets.length === 2 ? 1 : 1]; j++) {
+      const name = this.readVariableLengthString(offset, false);
+      offset += this.lengthOfStringAt(offset, false) + 1;
+      tcnames.push(name);
+    }
+    return tcnames;
+  }
+
+  private getGen1TrainersImpl(): Trainer[] {
+    const traineroffset = romEntryGetValue(this.romEntry, 'TrainerDataTableOffset');
+    const traineramount = Gen1Constants.trainerClassCount;
+    const trainerclasslimits = this.romEntry.arrayEntries.get('TrainerDataClassCounts') ?? [];
+
+    const pointers: number[] = new Array(traineramount + 1).fill(0);
+    for (let i = 1; i <= traineramount; i++) {
+      const tPointer = readWord(this.rom, traineroffset + (i - 1) * 2);
+      pointers[i] = calculateOffset(bankOf(traineroffset), tPointer);
+    }
+
+    const tcnames = this.getTrainerClassesForText();
+
+    const allTrainers: Trainer[] = [];
+    let index = 0;
+    for (let i = 1; i <= traineramount; i++) {
+      let offs = pointers[i];
+      const limit = trainerclasslimits[i] ?? 0;
+      const tcname = tcnames[i - 1] ?? ('Class ' + i);
+      for (let trnum = 0; trnum < limit; trnum++) {
+        index++;
+        const tr = new Trainer();
+        tr.offset = offs;
+        tr.index = index;
+        tr.trainerclass = i;
+        tr.fullDisplayName = tcname;
+        const dataType = this.rom[offs] & 0xFF;
+        if (dataType === 0xFF) {
+          // Special trainer with per-pokemon levels
+          tr.poketype = 1;
+          offs++;
+          while (this.rom[offs] !== 0x00) {
+            const tpk = new TrainerPokemon();
+            tpk.level = this.rom[offs] & 0xFF;
+            const pkIdx = this.pokeRBYToNumTable[this.rom[offs + 1] & 0xFF] ?? 0;
+            tpk.pokemon = pkIdx > 0 && pkIdx < this.pokes.length ? this.pokes[pkIdx] : this.pokes[1];
+            tr.pokemon.push(tpk);
+            offs += 2;
+          }
+        } else {
+          // Regular trainer with fixed level
+          tr.poketype = 0;
+          offs++;
+          while (this.rom[offs] !== 0x00) {
+            const tpk = new TrainerPokemon();
+            tpk.level = dataType;
+            const pkIdx = this.pokeRBYToNumTable[this.rom[offs] & 0xFF] ?? 0;
+            tpk.pokemon = pkIdx > 0 && pkIdx < this.pokes.length ? this.pokes[pkIdx] : this.pokes[1];
+            tr.pokemon.push(tpk);
+            offs++;
+          }
+        }
+        offs++;
+        allTrainers.push(tr);
+      }
+    }
+    Gen1Constants.tagTrainersUniversal(allTrainers);
+    if (this.romEntry.isYellow) {
+      Gen1Constants.tagTrainersYellow(allTrainers);
+    } else {
+      Gen1Constants.tagTrainersRB(allTrainers);
+    }
+    return allTrainers;
+  }
+
+  private setGen1TrainersImpl(trainerData: Trainer[]): void {
+    const traineroffset = romEntryGetValue(this.romEntry, 'TrainerDataTableOffset');
+    const traineramount = Gen1Constants.trainerClassCount;
+    const trainerclasslimits = this.romEntry.arrayEntries.get('TrainerDataClassCounts') ?? [];
+
+    const pointers: number[] = new Array(traineramount + 1).fill(0);
+    for (let i = 1; i <= traineramount; i++) {
+      const tPointer = readWord(this.rom, traineroffset + (i - 1) * 2);
+      pointers[i] = calculateOffset(bankOf(traineroffset), tPointer);
+    }
+
+    let tdIdx = 0;
+    for (let i = 1; i <= traineramount; i++) {
+      let offs = pointers[i];
+      const limit = trainerclasslimits[i] ?? 0;
+      for (let trnum = 0; trnum < limit; trnum++) {
+        const tr = trainerData[tdIdx++];
+        if (tr.poketype === 0) {
+          // Regular trainer
+          const fixedLevel = tr.pokemon[0]?.level ?? 5;
+          this.rom[offs] = fixedLevel & 0xFF;
+          offs++;
+          for (const tpk of tr.pokemon) {
+            this.rom[offs] = this.pokeNumToRBYTable[tpk.pokemon.number] & 0xFF;
+            offs++;
+          }
+        } else {
+          // Special trainer
+          this.rom[offs] = 0xFF;
+          offs++;
+          for (const tpk of tr.pokemon) {
+            this.rom[offs] = tpk.level & 0xFF;
+            this.rom[offs + 1] = this.pokeNumToRBYTable[tpk.pokemon.number] & 0xFF;
+            offs += 2;
+          }
+        }
+        this.rom[offs] = 0;
+        offs++;
+      }
+    }
+
+    // Zero out custom moves AI table
+    const extraTrainerMovesOffset = romEntryGetValue(this.romEntry, 'ExtraTrainerMovesTableOffset');
+    if (extraTrainerMovesOffset !== 0) {
+      this.rom[extraTrainerMovesOffset] = 0xFF;
+    }
+
+    // Champion Rival overrides in Red/Blue
+    if (!this.isYellow()) {
+      const glMovesOffset = romEntryGetValue(this.romEntry, 'GymLeaderMovesTableOffset');
+      if (glMovesOffset !== 0) {
+        const champRivalJump = glMovesOffset - Gen1Constants.champRivalOffsetFromGymLeaderMoves;
+        this.rom[champRivalJump] = GBConstants.gbZ80Nop;
+        this.rom[champRivalJump + 1] = GBConstants.gbZ80Nop;
+      }
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -2374,6 +2863,7 @@ export interface Gen1RomData {
 export function parseGen1OffsetsIni(text: string): RomEntry[] {
   const entries: RomEntry[] = [];
   let current: RomEntry | null = null;
+  const copyFromQueue: { entry: RomEntry; copyFrom: string }[] = [];
 
   for (const rawLine of text.split('\n')) {
     let q = rawLine.trim();
@@ -2410,26 +2900,91 @@ export function parseGen1OffsetsIni(text: string): RomEntry[] {
         current.crcInHeader = parseIniInt(value);
       } else if (key === 'CRC32') {
         current.expectedCRC32 = parseIniInt(value);
+      } else if (key === 'CopyFrom') {
+        copyFromQueue.push({ entry: current, copyFrom: value });
+      } else if (key === 'CopyTMText') {
+        // ignored for now
       } else if (key.endsWith('Tweak') || key.endsWith('tweak')) {
         current.tweakFiles.set(key, value);
-      } else if (key.endsWith('[]')) {
-        const arrayKey = key.substring(0, key.length - 2);
+      } else if (key.endsWith('[]') || (value.startsWith('[') && value.endsWith(']') && !key.includes('{}'))) {
+        const arrayKey = key.endsWith('[]') ? key.substring(0, key.length - 2) : key;
         if (value.startsWith('[') && value.endsWith(']')) {
           const inner = value.substring(1, value.length - 1);
           const nums = inner.split(',').map((s) => parseIniInt(s.trim()));
           current.arrayEntries.set(arrayKey, nums);
         }
-      } else if (
-        !key.includes('{}') &&
-        !key.startsWith('TMText') &&
-        !key.startsWith('StaticPokemon')
-      ) {
+      } else if (key.startsWith('StaticPokemon') && key.includes('{}')) {
+        // Parse StaticPokemon{}={Species=[...], Level=[...]}
+        const sp = parseStaticPokemonEntry(value);
+        if (sp) {
+          if (key.includes('GhostMarowak')) {
+            current.ghostMarowakOffsets = sp.speciesOffsets;
+          } else {
+            current.staticPokemon.push(sp);
+          }
+        }
+      } else if (key.startsWith('TMText')) {
+        // ignored
+      } else if (!key.includes('{}')) {
         current.entries.set(key, parseIniInt(value));
       }
     }
   }
 
+  // Process CopyFrom directives
+  for (const { entry, copyFrom } of copyFromQueue) {
+    const source = entries.find((e) => e.name === copyFrom);
+    if (source) {
+      // Copy entries that don't already exist in the target
+      for (const [k, v] of source.entries) {
+        if (!entry.entries.has(k)) {
+          entry.entries.set(k, v);
+        }
+      }
+      for (const [k, v] of source.arrayEntries) {
+        if (!entry.arrayEntries.has(k)) {
+          entry.arrayEntries.set(k, [...v]);
+        }
+      }
+      for (const [k, v] of source.tweakFiles) {
+        if (!entry.tweakFiles.has(k)) {
+          entry.tweakFiles.set(k, v);
+        }
+      }
+      if (entry.extraTableFile == null && source.extraTableFile != null) {
+        entry.extraTableFile = source.extraTableFile;
+      }
+      if (entry.staticPokemon.length === 0 && source.staticPokemon.length > 0) {
+        entry.staticPokemon = source.staticPokemon.map((sp) => ({
+          speciesOffsets: [...sp.speciesOffsets],
+          levelOffsets: [...sp.levelOffsets],
+        }));
+      }
+      if (entry.ghostMarowakOffsets.length === 0 && source.ghostMarowakOffsets.length > 0) {
+        entry.ghostMarowakOffsets = [...source.ghostMarowakOffsets];
+      }
+    }
+  }
+
   return entries;
+}
+
+function parseStaticPokemonEntry(value: string): StaticPokemonEntry | null {
+  // Format: {Species=[0x..., 0x...], Level=[0x...]}
+  const speciesMatch = value.match(/Species=\[([^\]]*)\]/);
+  const levelMatch = value.match(/Level=\[([^\]]*)\]/);
+  if (!speciesMatch) return null;
+  const speciesOffsets = speciesMatch[1]
+    .split(',')
+    .map((s) => parseIniInt(s.trim()))
+    .filter((n) => !isNaN(n));
+  const levelOffsets = levelMatch
+    ? levelMatch[1]
+        .split(',')
+        .map((s) => parseIniInt(s.trim()))
+        .filter((n) => !isNaN(n))
+    : [];
+  return { speciesOffsets, levelOffsets };
 }
 
 function parseIniInt(s: string): number {
@@ -3065,12 +3620,26 @@ export class Gen1RomHandlerFactory extends RomHandlerFactory {
 
   constructor(romEntries?: RomEntry[]) {
     super();
-    this.romEntries = romEntries ?? knownGen1RomEntries;
+    if (romEntries) {
+      this.romEntries = romEntries;
+    } else {
+      // Try to load from INI file
+      try {
+        const iniPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../src/com/dabomstew/pkrandom/config/gen1_offsets.ini');
+        if (fs.existsSync(iniPath)) {
+          const iniText = fs.readFileSync(iniPath, 'utf-8');
+          this.romEntries = parseGen1OffsetsIni(iniText);
+        } else {
+          this.romEntries = knownGen1RomEntries;
+        }
+      } catch {
+        this.romEntries = knownGen1RomEntries;
+      }
+    }
   }
 
   isLoadable(filename: string): boolean {
     try {
-      const fs = require('fs') as typeof import('fs');
       const stats = fs.statSync(filename);
       if (stats.size < GBConstants.minRomSize || stats.size > GBConstants.maxRomSize) {
         return false;
@@ -3088,6 +3657,6 @@ export class Gen1RomHandlerFactory extends RomHandlerFactory {
   }
 
   createWithLog(random: RandomInstance, log: LogStream | null): RomHandler {
-    return new Gen1RomHandler(random, log) as unknown as RomHandler;
+    return new Gen1RomHandler(random, log, this.romEntries) as unknown as RomHandler;
   }
 }
