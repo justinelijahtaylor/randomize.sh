@@ -1452,6 +1452,10 @@ export abstract class AbstractRomHandler implements RomHandler {
     evolutionUpdates.add(new EvolutionUpdate(evo.from, evo.to, EvolutionType.LEVEL, String(evo.extraInfo), false, false));
   }
 
+  protected addEvoUpdateStone(evolutionUpdates: Set<EvolutionUpdate>, evo: Evolution, item: string): void {
+    evolutionUpdates.add(new EvolutionUpdate(evo.from, evo.to, EvolutionType.STONE, item, false, false));
+  }
+
   protected addEvoUpdateCondensed(evolutionUpdates: Set<EvolutionUpdate>, evo: Evolution, additional: boolean): void {
     evolutionUpdates.add(new EvolutionUpdate(evo.from, evo.to, EvolutionType.LEVEL, String(evo.extraInfo), true, additional));
   }

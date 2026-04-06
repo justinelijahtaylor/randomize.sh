@@ -1,7 +1,11 @@
 import * as fs from "fs";
 import * as path from "path";
+import { fileURLToPath } from "url";
 import { crc32 } from "./crc32";
 import { SysConstants } from "./sys-constants";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const overrideFiles: string[] = [
   SysConstants.customNamesFile,
@@ -256,7 +260,16 @@ export class FileFunctions {
       "patches",
       filename
     );
-    return new Uint8Array(fs.readFileSync(patchPath));
+    if (fs.existsSync(patchPath)) {
+      return new Uint8Array(fs.readFileSync(patchPath));
+    }
+    // Fall back to Java source patches directory
+    const javaPath = path.resolve(
+      __dirname,
+      "../../src/com/dabomstew/pkrandom/patches",
+      filename
+    );
+    return new Uint8Array(fs.readFileSync(javaPath));
   }
 
   static applyPatch(rom: Uint8Array, patchName: string): void {

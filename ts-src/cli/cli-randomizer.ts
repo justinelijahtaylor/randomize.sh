@@ -14,6 +14,7 @@ import { RandomSource } from "../utils/random-source";
 import { FileFunctions } from "../utils/file-functions";
 import { Gen1RomHandlerFactory } from "../romhandlers/gen1-rom-handler";
 import { Gen2RomHandlerFactory } from "../romhandlers/gen2-rom-handler";
+import { Gen3RomHandlerFactory } from "../romhandlers/gen3-rom-handler";
 
 /**
  * Parsed CLI arguments.
@@ -43,7 +44,7 @@ export interface CliRomHandlerFactory {
  * The CLI accepts these via dependency injection for testability.
  */
 export function getDefaultFactories(): RomHandlerFactory[] {
-  return [new Gen1RomHandlerFactory(), new Gen2RomHandlerFactory()];
+  return [new Gen1RomHandlerFactory(), new Gen2RomHandlerFactory(), new Gen3RomHandlerFactory()];
 }
 
 function printError(
