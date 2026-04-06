@@ -298,99 +298,57 @@ export const rseEarlyRequiredHMMoves: number[] = [Moves.rockSmash];
 
 export const frlgEarlyRequiredHMMoves: number[] = [Moves.cut];
 
-//     private static List<String> rsShopNames = Arrays.asList(
-//             "Slateport Vitamins",
-// TODO: "Slateport TMs",
-// TODO: "Oldale Poké Mart (Before Pokédex)",
-// TODO: "Oldale Poké Mart (After Pokédex)",
-// TODO: "Lavaridge Herbs",
-// TODO: "Lavaridge Poké Mart",
-// TODO: "Fallarbor Poké Mart",
-// TODO: "Verdanturf Poké Mart",
-// TODO: "Petalburg Poké Mart (Before 4 Badges)",
-// TODO: "Petalburg Poké Mart (After 4 Badges)",
-// TODO: "Slateport Poké Mart",
-// TODO: "Mauville Poké Mart",
-// TODO: "Rustboro Poké Mart (Before Delivering Devon Goods)",
-// TODO: "Rustboro Poké Mart (After Delivering Devon Goods)",
-// TODO: "Fortree Poké Mart",
-// TODO: "Lilycove Department Store 2F Left",
-// TODO: "Lilycove Department Store 2F Right",
-// TODO: "Lilycove Department Store 3F Left",
-// TODO: "Lilycove Department Store 3F Right",
-// TODO: "Lilycove Department Store 4F Left (TMs)",
-// TODO: "Lilycove Department Store 4F Right (TMs)",
-// TODO: "Mossdeep Poké Mart",
-// TODO: "Sootopolis Poké Mart",
-// TODO: "Pokémon League Poké Mart"
-// TODO: );
+const rsShopNames: string[] = [
+    "Slateport Vitamins", "Slateport TMs",
+    "Oldale Poke Mart (Before Pokedex)", "Oldale Poke Mart (After Pokedex)",
+    "Lavaridge Herbs", "Lavaridge Poke Mart", "Fallarbor Poke Mart",
+    "Verdanturf Poke Mart", "Petalburg Poke Mart (Before 4 Badges)",
+    "Petalburg Poke Mart (After 4 Badges)", "Slateport Poke Mart",
+    "Mauville Poke Mart", "Rustboro Poke Mart (Before Delivering Devon Goods)",
+    "Rustboro Poke Mart (After Delivering Devon Goods)", "Fortree Poke Mart",
+    "Lilycove Department Store 2F Left", "Lilycove Department Store 2F Right",
+    "Lilycove Department Store 3F Left", "Lilycove Department Store 3F Right",
+    "Lilycove Department Store 4F Left (TMs)", "Lilycove Department Store 4F Right (TMs)",
+    "Mossdeep Poke Mart", "Sootopolis Poke Mart", "Pokemon League Poke Mart",
+];
 
-//     private static List<String> frlgShopNames = Arrays.asList(
-//             "Trainer Tower Poké Mart",
-// TODO: "Two Island Market Stall (Initial)",
-// TODO: "Two Island Market Stall (After Saving Lostelle)",
-// TODO: "Two Island Market Stall (After Hall of Fame)",
-// TODO: "Two Island Market Stall (After Ruby/Sapphire Quest)",
-// TODO: "Viridian Poké Mart",
-// TODO: "Pewter Poké Mart",
-// TODO: "Cerulean Poké Mart",
-// TODO: "Lavender Poké Mart",
-// TODO: "Vermillion Poké Mart",
-// TODO: "Celadon Department 2F South",
-// TODO: "Celadon Department 2F North (TMs)",
-// TODO: "Celadon Department 4F",
-// TODO: "Celadon Department 5F South",
-// TODO: "Celadon Department 5F North",
-// TODO: "Fuchsia Poké Mart",
-// TODO: "Cinnabar Poké Mart",
-// TODO: "Indigo Plateau Poké Mart",
-// TODO: "Saffron Poké Mart",
-// TODO: "Seven Island Poké Mart",
-// TODO: "Three Island Poké Mart",
-// TODO: "Four Island Poké Mart",
-// TODO: "Six Island Poké Mart"
-// TODO: );
+const frlgShopNames: string[] = [
+    "Trainer Tower Poke Mart",
+    "Two Island Market Stall (Initial)", "Two Island Market Stall (After Saving Lostelle)",
+    "Two Island Market Stall (After Hall of Fame)", "Two Island Market Stall (After Ruby/Sapphire Quest)",
+    "Viridian Poke Mart", "Pewter Poke Mart", "Cerulean Poke Mart",
+    "Lavender Poke Mart", "Vermillion Poke Mart",
+    "Celadon Department 2F South", "Celadon Department 2F North (TMs)",
+    "Celadon Department 4F", "Celadon Department 5F South", "Celadon Department 5F North",
+    "Fuchsia Poke Mart", "Cinnabar Poke Mart", "Indigo Plateau Poke Mart",
+    "Saffron Poke Mart", "Seven Island Poke Mart", "Three Island Poke Mart",
+    "Four Island Poke Mart", "Six Island Poke Mart",
+];
 
-//     private static List<String> emShopNames = Arrays.asList(
-//             "Slateport Vitamins",
-// TODO: "Slateport TMs",
-// TODO: "Oldale Poké Mart (Before Pokédex)",
-// TODO: "Oldale Poké Mart (After Pokédex)",
-// TODO: "Lavaridge Herbs",
-// TODO: "Lavaridge Poké Mart",
-// TODO: "Fallarbor Poké Mart",
-// TODO: "Verdanturf Poké Mart",
-// TODO: "Petalburg Poké Mart (Before 4 Badges)",
-// TODO: "Petalburg Poké Mart (After 4 Badges)",
-// TODO: "Slateport Poké Mart",
-// TODO: "Mauville Poké Mart",
-// TODO: "Rustboro Poké Mart (Before Delivering Devon Goods)",
-// TODO: "Rustboro Poké Mart (After Delivering Devon Goods)",
-// TODO: "Fortree Poké Mart",
-// TODO: "Lilycove Department Store 2F Left",
-// TODO: "Lilycove Department Store 2F Right",
-// TODO: "Lilycove Department Store 3F Left",
-// TODO: "Lilycove Department Store 3F Right",
-// TODO: "Lilycove Department Store 4F Left (TMs)",
-// TODO: "Lilycove Department Store 4F Right (TMs)",
-// TODO: "Mossdeep Poké Mart",
-// TODO: "Sootopolis Poké Mart",
-// TODO: "Pokémon League Poké Mart",
-// TODO: "Battle Frontier Poké Mart",
-// TODO: "Trainer Hill Poké Mart (Before Hall of Fame)",
-// TODO: "Trainer Hill Poké Mart (After Hall of Fame)"
-// TODO: );
+const emShopNames: string[] = [
+    "Slateport Vitamins", "Slateport TMs",
+    "Oldale Poke Mart (Before Pokedex)", "Oldale Poke Mart (After Pokedex)",
+    "Lavaridge Herbs", "Lavaridge Poke Mart", "Fallarbor Poke Mart",
+    "Verdanturf Poke Mart", "Petalburg Poke Mart (Before 4 Badges)",
+    "Petalburg Poke Mart (After 4 Badges)", "Slateport Poke Mart",
+    "Mauville Poke Mart", "Rustboro Poke Mart (Before Delivering Devon Goods)",
+    "Rustboro Poke Mart (After Delivering Devon Goods)", "Fortree Poke Mart",
+    "Lilycove Department Store 2F Left", "Lilycove Department Store 2F Right",
+    "Lilycove Department Store 3F Left", "Lilycove Department Store 3F Right",
+    "Lilycove Department Store 4F Left (TMs)", "Lilycove Department Store 4F Right (TMs)",
+    "Mossdeep Poke Mart", "Sootopolis Poke Mart", "Pokemon League Poke Mart",
+    "Battle Frontier Poke Mart", "Trainer Hill Poke Mart (Before Hall of Fame)",
+    "Trainer Hill Poke Mart (After Hall of Fame)",
+];
 
-export function getShopNames(romType: number): string[] | null {
-    // TODO: rsShopNames, frlgShopNames, emShopNames are not yet defined
-    // if (romType == RomType_Ruby || romType == RomType_Sapp) {
-    //     return rsShopNames;
-    // } else if (romType == RomType_FRLG) {
-    //     return frlgShopNames;
-    // } else if (romType == RomType_Em) {
-    //     return emShopNames;
-    // }
-    return null;
+export function getShopNames(romType: number): string[] {
+    if (romType === RomType_Ruby || romType === RomType_Sapp) {
+        return rsShopNames;
+    } else if (romType === RomType_FRLG) {
+        return frlgShopNames;
+    } else {
+        return emShopNames;
+    }
 }
 
 export const evolutionItems: number[] = [Gen3Items.sunStone, Gen3Items.moonStone, Gen3Items.fireStone, Gen3Items.thunderstone, Gen3Items.waterStone, Gen3Items.leafStone];
@@ -604,6 +562,18 @@ function setupAllowedItems(): void {
     opShopItems.push(...rangeClosed(Gen3Items.tinyMushroom, Gen3Items.bigMushroom));
     opShopItems.push(...rangeClosed(Gen3Items.pearl, Gen3Items.nugget));
     opShopItems.push(Gen3Items.luckyEgg);
+}
+
+export function getAllowedItems(): ItemList {
+    return allowedItems;
+}
+
+export function getRegularShopItems(): number[] {
+    return regularShopItems;
+}
+
+export function getOPShopItems(): number[] {
+    return opShopItems;
 }
 
 export function getNonBadItems(romType: number): ItemList {
@@ -993,4 +963,88 @@ function setMultiBattleStatus(allTrainers: any[], status: MultiBattleStatus, ...
     }
 }
 
-// TODO: const balancedItemPrices = Stream.of(new Integer[][] { // Skip item index 0. All prices divided by 10 {Gen3Items.masterBall, 300}, {Gen3Items.ultraBall, 120}, {Gen3Items.greatBall, 60}, {Gen3Items.pokeBall, 20}, {Gen3Items.safariBall, 50}, {Gen3Items.netBall, 100}, {Gen3Items.diveBall, 100}, {Gen3Items.nestBall, 100}, {Gen3Items.repeatBall, 100}, {Gen3Items.timerBall, 100}, {Gen3Items.luxuryBall, 100}, {Gen3Items.premierBall, 20}, {Gen3Items.potion, 30}, {Gen3Items.antidote, 10}, {Gen3Items.burnHeal, 25}, {Gen3Items.iceHeal, 25}, {Gen3Items.awakening, 25}, {Gen3Items.parlyzHeal, 20}, {Gen3Items.fullRestore, 300}, {Gen3Items.maxPotion, 250}, {Gen3Items.hyperPotion, 120}, {Gen3Items.superPotion, 70}, {Gen3Items.fullHeal, 60}, {Gen3Items.revive, 150}, {Gen3Items.maxRevive, 400}, {Gen3Items.freshWater, 40}, {Gen3Items.sodaPop, 60}, {Gen3Items.lemonade, 70}, {Gen3Items.moomooMilk, 80}, {Gen3Items.energyPowder, 40}, {Gen3Items.energyRoot, 110}, {Gen3Items.healPowder, 45}, {Gen3Items.revivalHerb, 280}, {Gen3Items.ether, 300}, {Gen3Items.maxEther, 450}, {Gen3Items.elixir, 1500}, {Gen3Items.maxElixir, 1800}, {Gen3Items.lavaCookie, 45}, {Gen3Items.blueFlute, 2}, {Gen3Items.yellowFlute, 2}, {Gen3Items.redFlute, 2}, {Gen3Items.blackFlute, 2}, {Gen3Items.whiteFlute, 2}, {Gen3Items.berryJuice, 10}, {Gen3Items.sacredAsh, 1000}, {Gen3Items.shoalSalt, 2}, {Gen3Items.shoalShell, 2}, {Gen3Items.redShard, 40}, {Gen3Items.blueShard, 40}, {Gen3Items.yellowShard, 40}, {Gen3Items.greenShard, 40}, {Gen3Items.unknown52, 0}, {Gen3Items.unknown53, 0}, {Gen3Items.unknown54, 0}, {Gen3Items.unknown55, 0}, {Gen3Items.unknown56, 0}, {Gen3Items.unknown57, 0}, {Gen3Items.unknown58, 0}, {Gen3Items.unknown59, 0}, {Gen3Items.unknown60, 0}, {Gen3Items.unknown61, 0}, {Gen3Items.unknown62, 0}, {Gen3Items.hpUp, 980}, {Gen3Items.protein, 980}, {Gen3Items.iron, 980}, {Gen3Items.carbos, 980}, {Gen3Items.calcium, 980}, {Gen3Items.rareCandy, 1000}, {Gen3Items.ppUp, 980}, {Gen3Items.zinc, 980}, {Gen3Items.ppMax, 2490}, {Gen3Items.unknown72, 0}, {Gen3Items.guardSpec, 70}, {Gen3Items.direHit, 65}, {Gen3Items.xAttack, 50}, {Gen3Items.xDefend, 55}, {Gen3Items.xSpeed, 35}, {Gen3Items.xAccuracy, 95}, {Gen3Items.xSpecial, 35}, {Gen3Items.pokeDoll, 100}, {Gen3Items.fluffyTail, 100}, {Gen3Items.unknown82, 0}, {Gen3Items.superRepel, 50}, {Gen3Items.maxRepel, 70}, {Gen3Items.escapeRope, 55}, {Gen3Items.repel, 35}, {Gen3Items.unknown87, 0}, {Gen3Items.unknown88, 0}, {Gen3Items.unknown89, 0}, {Gen3Items.unknown90, 0}, {Gen3Items.unknown91, 0}, {Gen3Items.unknown92, 0}, {Gen3Items.sunStone, 300}, {Gen3Items.moonStone, 300}, {Gen3Items.fireStone, 300}, {Gen3Items.thunderstone, 300}, {Gen3Items.waterStone, 300}, {Gen3Items.leafStone, 300}, {Gen3Items.unknown99, 0}, {Gen3Items.unknown100, 0}, {Gen3Items.unknown101, 0}, {Gen3Items.unknown102, 0}, {Gen3Items.tinyMushroom, 50}, {Gen3Items.bigMushroom, 500}, {Gen3Items.unknown105, 0}, {Gen3Items.pearl, 140}, {Gen3Items.bigPearl, 750}, {Gen3Items.stardust, 200}, {Gen3Items.starPiece, 980}, {Gen3Items.nugget, 1000}, {Gen3Items.heartScale, 500}, {Gen3Items.unknown112, 0}, {Gen3Items.unknown113, 0}, {Gen3Items.unknown114, 0}, {Gen3Items.unknown115, 0}, {Gen3Items.unknown116, 0}, {Gen3Items.unknown117, 0}, {Gen3Items.unknown118, 0}, {Gen3Items.unknown119, 0}, {Gen3Items.unknown120, 0}, {Gen3Items.orangeMail, 5}, {Gen3Items.harborMail, 5}, {Gen3Items.glitterMail, 5}, {Gen3Items.mechMail, 5}, {Gen3Items.woodMail, 5}, {Gen3Items.waveMail, 5}, {Gen3Items.beadMail, 5}, {Gen3Items.shadowMail, 5}, {Gen3Items.tropicMail, 5}, {Gen3Items.dreamMail, 5}, {Gen3Items.fabMail, 5}, {Gen3Items.retroMail, 5}, {Gen3Items.cheriBerry, 20}, {Gen3Items.chestoBerry, 25}, {Gen3Items.pechaBerry, 10}, {Gen3Items.rawstBerry, 25}, {Gen3Items.aspearBerry, 25}, {Gen3Items.leppaBerry, 300}, {Gen3Items.oranBerry, 5}, {Gen3Items.persimBerry, 20}, {Gen3Items.lumBerry, 50}, {Gen3Items.sitrusBerry, 50}, {Gen3Items.figyBerry, 10}, {Gen3Items.wikiBerry, 10}, {Gen3Items.magoBerry, 10}, {Gen3Items.aguavBerry, 10}, {Gen3Items.iapapaBerry, 10}, {Gen3Items.razzBerry, 50}, {Gen3Items.blukBerry, 50}, {Gen3Items.nanabBerry, 50}, {Gen3Items.wepearBerry, 50}, {Gen3Items.pinapBerry, 50}, {Gen3Items.pomegBerry, 50}, {Gen3Items.kelpsyBerry, 50}, {Gen3Items.qualotBerry, 50}, {Gen3Items.hondewBerry, 50}, {Gen3Items.grepaBerry, 50}, {Gen3Items.tamatoBerry, 50}, {Gen3Items.cornnBerry, 50}, {Gen3Items.magostBerry, 50}, {Gen3Items.rabutaBerry, 50}, {Gen3Items.nomelBerry, 50}, {Gen3Items.spelonBerry, 50}, {Gen3Items.pamtreBerry, 50}, {Gen3Items.watmelBerry, 50}, {Gen3Items.durinBerry, 50}, {Gen3Items.belueBerry, 50}, {Gen3Items.liechiBerry, 100}, {Gen3Items.ganlonBerry, 100}, {Gen3Items.salacBerry, 100}, {Gen3Items.petayaBerry, 100}, {Gen3Items.apicotBerry, 100}, {Gen3Items.lansatBerry, 100}, {Gen3Items.starfBerry, 100}, {Gen3Items.enigmaBerry, 100}, {Gen3Items.unknown176, 0}, {Gen3Items.unknown177, 0}, {Gen3Items.unknown178, 0}, {Gen3Items.brightPowder, 300}, {Gen3Items.whiteHerb, 100}, {Gen3Items.machoBrace, 300}, {Gen3Items.expShare, 600}, {Gen3Items.quickClaw, 450}, {Gen3Items.sootheBell, 100}, {Gen3Items.mentalHerb, 100}, {Gen3Items.choiceBand, 1000}, {Gen3Items.kingsRock, 500}, {Gen3Items.silverPowder, 200}, {Gen3Items.amuletCoin, 1500}, {Gen3Items.cleanseTag, 100}, {Gen3Items.soulDew, 20}, {Gen3Items.deepSeaTooth, 300}, {Gen3Items.deepSeaScale, 300}, {Gen3Items.smokeBall, 20}, {Gen3Items.everstone, 20}, {Gen3Items.focusBand, 300}, {Gen3Items.luckyEgg, 1000}, {Gen3Items.scopeLens, 500}, {Gen3Items.metalCoat, 300}, {Gen3Items.leftovers, 1000}, {Gen3Items.dragonScale, 300}, {Gen3Items.lightBall, 10}, {Gen3Items.softSand, 200}, {Gen3Items.hardStone, 200}, {Gen3Items.miracleSeed, 200}, {Gen3Items.blackGlasses, 200}, {Gen3Items.blackBelt, 200}, {Gen3Items.magnet, 200}, {Gen3Items.mysticWater, 200}, {Gen3Items.sharpBeak, 200}, {Gen3Items.poisonBarb, 200}, {Gen3Items.neverMeltIce, 200}, {Gen3Items.spellTag, 200}, {Gen3Items.twistedSpoon, 200}, {Gen3Items.charcoal, 200}, {Gen3Items.dragonFang, 200}, {Gen3Items.silkScarf, 200}, {Gen3Items.upGrade, 300}, {Gen3Items.shellBell, 600}, {Gen3Items.seaIncense, 200}, {Gen3Items.laxIncense, 300}, {Gen3Items.luckyPunch, 1}, {Gen3Items.metalPowder, 1}, {Gen3Items.thickClub, 50}, {Gen3Items.stick, 20}, {Gen3Items.unknown226, 0}, {Gen3Items.unknown227, 0}, {Gen3Items.unknown228, 0}, {Gen3Items.unknown229, 0}, {Gen3Items.unknown230, 0}, {Gen3Items.unknown231, 0}, {Gen3Items.unknown232, 0}, {Gen3Items.unknown233, 0}, {Gen3Items.unknown234, 0}, {Gen3Items.unknown235, 0}, {Gen3Items.unknown236, 0}, {Gen3Items.unknown237, 0}, {Gen3Items.unknown238, 0}, {Gen3Items.unknown239, 0}, {Gen3Items.unknown240, 0}, {Gen3Items.unknown241, 0}, {Gen3Items.unknown242, 0}, {Gen3Items.unknown243, 0}, {Gen3Items.unknown244, 0}, {Gen3Items.unknown245, 0}, {Gen3Items.unknown246, 0}, {Gen3Items.unknown247, 0}, {Gen3Items.unknown248, 0}, {Gen3Items.unknown249, 0}, {Gen3Items.unknown250, 0}, {Gen3Items.unknown251, 0}, {Gen3Items.unknown252, 0}, {Gen3Items.unknown253, 0}, {Gen3Items.redScarf, 10}, {Gen3Items.blueScarf, 10}, {Gen3Items.pinkScarf, 10}, {Gen3Items.greenScarf, 10}, {Gen3Items.yellowScarf, 10}, {Gen3Items.machBike, 0}, {Gen3Items.coinCase, 0}, {Gen3Items.itemfinder, 0}, {Gen3Items.oldRod, 0}, {Gen3Items.goodRod, 0}, {Gen3Items.superRod, 0}, {Gen3Items.ssTicket, 0}, {Gen3Items.contestPass, 0}, {Gen3Items.unknown267, 0}, {Gen3Items.wailmerPail, 0}, {Gen3Items.devonGoods, 0}, {Gen3Items.sootSack, 0}, {Gen3Items.basementKey, 0}, {Gen3Items.acroBike, 0}, {Gen3Items.pokeblockCase, 0}, {Gen3Items.letter, 0}, {Gen3Items.eonTicket, 0}, {Gen3Items.redOrb, 0}, {Gen3Items.blueOrb, 0}, {Gen3Items.scanner, 0}, {Gen3Items.goGoggles, 0}, {Gen3Items.meteorite, 0}, {Gen3Items.rm1Key, 0}, {Gen3Items.rm2Key, 0}, {Gen3Items.rm4Key, 0}, {Gen3Items.rm6Key, 0}, {Gen3Items.storageKey, 0}, {Gen3Items.rootFossil, 0}, {Gen3Items.clawFossil, 0}, {Gen3Items.devonScope, 0}, {Gen3Items.tm01, 300}, {Gen3Items.tm02, 300}, {Gen3Items.tm03, 300}, {Gen3Items.tm04, 150}, {Gen3Items.tm05, 100}, {Gen3Items.tm06, 300}, {Gen3Items.tm07, 200}, {Gen3Items.tm08, 150}, {Gen3Items.tm09, 200}, {Gen3Items.tm10, 200}, {Gen3Items.tm11, 200}, {Gen3Items.tm12, 150}, {Gen3Items.tm13, 300}, {Gen3Items.tm14, 550}, {Gen3Items.tm15, 750}, {Gen3Items.tm16, 200}, {Gen3Items.tm17, 200}, {Gen3Items.tm18, 200}, {Gen3Items.tm19, 300}, {Gen3Items.tm20, 200}, {Gen3Items.tm21, 100}, {Gen3Items.tm22, 300}, {Gen3Items.tm23, 300}, {Gen3Items.tm24, 300}, {Gen3Items.tm25, 550}, {Gen3Items.tm26, 300}, {Gen3Items.tm27, 100}, {Gen3Items.tm28, 200}, {Gen3Items.tm29, 300}, {Gen3Items.tm30, 300}, {Gen3Items.tm31, 300}, {Gen3Items.tm32, 100}, {Gen3Items.tm33, 200}, {Gen3Items.tm34, 300}, {Gen3Items.tm35, 300}, {Gen3Items.tm36, 300}, {Gen3Items.tm37, 200}, {Gen3Items.tm38, 550}, {Gen3Items.tm39, 200}, {Gen3Items.tm40, 300}, {Gen3Items.tm41, 150}, {Gen3Items.tm42, 300}, {Gen3Items.tm43, 200}, {Gen3Items.tm44, 300}, {Gen3Items.tm45, 300}, {Gen3Items.tm46, 200}, {Gen3Items.tm47, 300}, {Gen3Items.tm48, 300}, {Gen3Items.tm49, 150}, {Gen3Items.tm50, 550}, {Gen3Items.hm01, 0}, {Gen3Items.hm02, 0}, {Gen3Items.hm03, 0}, {Gen3Items.hm04, 0}, {Gen3Items.hm05, 0}, {Gen3Items.hm06, 0}, {Gen3Items.hm07, 0}, {Gen3Items.hm08, 0}, {Gen3Items.unknown347, 0}, {Gen3Items.unknown348, 0}, {Gen3Items.oaksParcel, 0}, {Gen3Items.pokeFlute, 0}, {Gen3Items.secretKey, 0}, {Gen3Items.bikeVoucher, 0}, {Gen3Items.goldTeeth, 0}, {Gen3Items.oldAmber, 0}, {Gen3Items.cardKey, 0}, {Gen3Items.liftKey, 0}, {Gen3Items.helixFossil, 0}, {Gen3Items.domeFossil, 0}, {Gen3Items.silphScope, 0}, {Gen3Items.bicycle, 0}, {Gen3Items.townMap, 0}, {Gen3Items.vsSeeker, 0}, {Gen3Items.fameChecker, 0}, {Gen3Items.tmCase, 0}, {Gen3Items.berryPouch, 0}, {Gen3Items.teachyTV, 0}, {Gen3Items.triPass, 0}, {Gen3Items.rainbowPass, 0}, {Gen3Items.tea, 0}, {Gen3Items.mysticTicket, 0}, {Gen3Items.auroraTicket, 0}, {Gen3Items.powderJar, 0}, {Gen3Items.ruby, 0}, {Gen3Items.sapphire, 0}, {Gen3Items.magmaEmblem, 0}, {Gen3Items.oldSeaMap, 0}, }).collect(Collectors.toMap(kv -> kv[0], kv -> kv[1]));
+export const balancedItemPrices: Map<number, number> = new Map<number, number>([
+    // Skip item index 0. All prices divided by 10
+    [Gen3Items.masterBall, 300], [Gen3Items.ultraBall, 120], [Gen3Items.greatBall, 60],
+    [Gen3Items.pokeBall, 20], [Gen3Items.safariBall, 50], [Gen3Items.netBall, 100],
+    [Gen3Items.diveBall, 100], [Gen3Items.nestBall, 100], [Gen3Items.repeatBall, 100],
+    [Gen3Items.timerBall, 100], [Gen3Items.luxuryBall, 100], [Gen3Items.premierBall, 20],
+    [Gen3Items.potion, 30], [Gen3Items.antidote, 10], [Gen3Items.burnHeal, 25],
+    [Gen3Items.iceHeal, 25], [Gen3Items.awakening, 25], [Gen3Items.parlyzHeal, 20],
+    [Gen3Items.fullRestore, 300], [Gen3Items.maxPotion, 250], [Gen3Items.hyperPotion, 120],
+    [Gen3Items.superPotion, 70], [Gen3Items.fullHeal, 60], [Gen3Items.revive, 150],
+    [Gen3Items.maxRevive, 400], [Gen3Items.freshWater, 40], [Gen3Items.sodaPop, 60],
+    [Gen3Items.lemonade, 70], [Gen3Items.moomooMilk, 80], [Gen3Items.energyPowder, 40],
+    [Gen3Items.energyRoot, 110], [Gen3Items.healPowder, 45], [Gen3Items.revivalHerb, 280],
+    [Gen3Items.ether, 300], [Gen3Items.maxEther, 450], [Gen3Items.elixir, 1500],
+    [Gen3Items.maxElixir, 1800], [Gen3Items.lavaCookie, 45], [Gen3Items.blueFlute, 2],
+    [Gen3Items.yellowFlute, 2], [Gen3Items.redFlute, 2], [Gen3Items.blackFlute, 2],
+    [Gen3Items.whiteFlute, 2], [Gen3Items.berryJuice, 10], [Gen3Items.sacredAsh, 1000],
+    [Gen3Items.shoalSalt, 2], [Gen3Items.shoalShell, 2], [Gen3Items.redShard, 40],
+    [Gen3Items.blueShard, 40], [Gen3Items.yellowShard, 40], [Gen3Items.greenShard, 40],
+    [Gen3Items.hpUp, 980], [Gen3Items.protein, 980], [Gen3Items.iron, 980],
+    [Gen3Items.carbos, 980], [Gen3Items.calcium, 980], [Gen3Items.rareCandy, 1000],
+    [Gen3Items.ppUp, 980], [Gen3Items.zinc, 980], [Gen3Items.ppMax, 2490],
+    [Gen3Items.guardSpec, 70], [Gen3Items.direHit, 65], [Gen3Items.xAttack, 50],
+    [Gen3Items.xDefend, 55], [Gen3Items.xSpeed, 35], [Gen3Items.xAccuracy, 95],
+    [Gen3Items.xSpecial, 35], [Gen3Items.pokeDoll, 100], [Gen3Items.fluffyTail, 100],
+    [Gen3Items.superRepel, 50], [Gen3Items.maxRepel, 70], [Gen3Items.escapeRope, 55],
+    [Gen3Items.repel, 35], [Gen3Items.sunStone, 300], [Gen3Items.moonStone, 300],
+    [Gen3Items.fireStone, 300], [Gen3Items.thunderstone, 300], [Gen3Items.waterStone, 300],
+    [Gen3Items.leafStone, 300], [Gen3Items.tinyMushroom, 50], [Gen3Items.bigMushroom, 500],
+    [Gen3Items.pearl, 140], [Gen3Items.bigPearl, 750], [Gen3Items.stardust, 200],
+    [Gen3Items.starPiece, 980], [Gen3Items.nugget, 1000], [Gen3Items.heartScale, 500],
+    [Gen3Items.orangeMail, 5], [Gen3Items.harborMail, 5], [Gen3Items.glitterMail, 5],
+    [Gen3Items.mechMail, 5], [Gen3Items.woodMail, 5], [Gen3Items.waveMail, 5],
+    [Gen3Items.beadMail, 5], [Gen3Items.shadowMail, 5], [Gen3Items.tropicMail, 5],
+    [Gen3Items.dreamMail, 5], [Gen3Items.fabMail, 5], [Gen3Items.retroMail, 5],
+    [Gen3Items.cheriBerry, 20], [Gen3Items.chestoBerry, 25], [Gen3Items.pechaBerry, 10],
+    [Gen3Items.rawstBerry, 25], [Gen3Items.aspearBerry, 25], [Gen3Items.leppaBerry, 300],
+    [Gen3Items.oranBerry, 5], [Gen3Items.persimBerry, 20], [Gen3Items.lumBerry, 50],
+    [Gen3Items.sitrusBerry, 50], [Gen3Items.figyBerry, 10], [Gen3Items.wikiBerry, 10],
+    [Gen3Items.magoBerry, 10], [Gen3Items.aguavBerry, 10], [Gen3Items.iapapaBerry, 10],
+    [Gen3Items.razzBerry, 50], [Gen3Items.blukBerry, 50], [Gen3Items.nanabBerry, 50],
+    [Gen3Items.wepearBerry, 50], [Gen3Items.pinapBerry, 50], [Gen3Items.pomegBerry, 50],
+    [Gen3Items.kelpsyBerry, 50], [Gen3Items.qualotBerry, 50], [Gen3Items.hondewBerry, 50],
+    [Gen3Items.grepaBerry, 50], [Gen3Items.tamatoBerry, 50], [Gen3Items.cornnBerry, 50],
+    [Gen3Items.magostBerry, 50], [Gen3Items.rabutaBerry, 50], [Gen3Items.nomelBerry, 50],
+    [Gen3Items.spelonBerry, 50], [Gen3Items.pamtreBerry, 50], [Gen3Items.watmelBerry, 50],
+    [Gen3Items.durinBerry, 50], [Gen3Items.belueBerry, 50], [Gen3Items.liechiBerry, 100],
+    [Gen3Items.ganlonBerry, 100], [Gen3Items.salacBerry, 100], [Gen3Items.petayaBerry, 100],
+    [Gen3Items.apicotBerry, 100], [Gen3Items.lansatBerry, 100], [Gen3Items.starfBerry, 100],
+    [Gen3Items.enigmaBerry, 100], [Gen3Items.brightPowder, 300], [Gen3Items.whiteHerb, 100],
+    [Gen3Items.machoBrace, 300], [Gen3Items.expShare, 600], [Gen3Items.quickClaw, 450],
+    [Gen3Items.sootheBell, 100], [Gen3Items.mentalHerb, 100], [Gen3Items.choiceBand, 1000],
+    [Gen3Items.kingsRock, 500], [Gen3Items.silverPowder, 200], [Gen3Items.amuletCoin, 1500],
+    [Gen3Items.cleanseTag, 100], [Gen3Items.soulDew, 20], [Gen3Items.deepSeaTooth, 300],
+    [Gen3Items.deepSeaScale, 300], [Gen3Items.smokeBall, 20], [Gen3Items.everstone, 20],
+    [Gen3Items.focusBand, 300], [Gen3Items.luckyEgg, 1000], [Gen3Items.scopeLens, 500],
+    [Gen3Items.metalCoat, 300], [Gen3Items.leftovers, 1000], [Gen3Items.dragonScale, 300],
+    [Gen3Items.lightBall, 10], [Gen3Items.softSand, 200], [Gen3Items.hardStone, 200],
+    [Gen3Items.miracleSeed, 200], [Gen3Items.blackGlasses, 200], [Gen3Items.blackBelt, 200],
+    [Gen3Items.magnet, 200], [Gen3Items.mysticWater, 200], [Gen3Items.sharpBeak, 200],
+    [Gen3Items.poisonBarb, 200], [Gen3Items.neverMeltIce, 200], [Gen3Items.spellTag, 200],
+    [Gen3Items.twistedSpoon, 200], [Gen3Items.charcoal, 200], [Gen3Items.dragonFang, 200],
+    [Gen3Items.silkScarf, 200], [Gen3Items.upGrade, 300], [Gen3Items.shellBell, 600],
+    [Gen3Items.seaIncense, 200], [Gen3Items.laxIncense, 300], [Gen3Items.luckyPunch, 1],
+    [Gen3Items.metalPowder, 1], [Gen3Items.thickClub, 50], [Gen3Items.stick, 20],
+    [Gen3Items.redScarf, 10], [Gen3Items.blueScarf, 10], [Gen3Items.pinkScarf, 10],
+    [Gen3Items.greenScarf, 10], [Gen3Items.yellowScarf, 10],
+    [Gen3Items.tm01, 300], [Gen3Items.tm02, 300], [Gen3Items.tm03, 300],
+    [Gen3Items.tm04, 150], [Gen3Items.tm05, 100], [Gen3Items.tm06, 300],
+    [Gen3Items.tm07, 200], [Gen3Items.tm08, 150], [Gen3Items.tm09, 200],
+    [Gen3Items.tm10, 200], [Gen3Items.tm11, 200], [Gen3Items.tm12, 150],
+    [Gen3Items.tm13, 300], [Gen3Items.tm14, 550], [Gen3Items.tm15, 750],
+    [Gen3Items.tm16, 200], [Gen3Items.tm17, 200], [Gen3Items.tm18, 200],
+    [Gen3Items.tm19, 300], [Gen3Items.tm20, 200], [Gen3Items.tm21, 100],
+    [Gen3Items.tm22, 300], [Gen3Items.tm23, 300], [Gen3Items.tm24, 300],
+    [Gen3Items.tm25, 550], [Gen3Items.tm26, 300], [Gen3Items.tm27, 100],
+    [Gen3Items.tm28, 200], [Gen3Items.tm29, 300], [Gen3Items.tm30, 300],
+    [Gen3Items.tm31, 300], [Gen3Items.tm32, 100], [Gen3Items.tm33, 200],
+    [Gen3Items.tm34, 300], [Gen3Items.tm35, 300], [Gen3Items.tm36, 300],
+    [Gen3Items.tm37, 200], [Gen3Items.tm38, 550], [Gen3Items.tm39, 200],
+    [Gen3Items.tm40, 300], [Gen3Items.tm41, 150], [Gen3Items.tm42, 300],
+    [Gen3Items.tm43, 200], [Gen3Items.tm44, 300], [Gen3Items.tm45, 300],
+    [Gen3Items.tm46, 200], [Gen3Items.tm47, 300], [Gen3Items.tm48, 300],
+    [Gen3Items.tm49, 150], [Gen3Items.tm50, 550],
+]);
