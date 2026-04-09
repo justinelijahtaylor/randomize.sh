@@ -1583,58 +1583,7 @@ export class Gen2RomHandler extends AbstractGBCRomHandler {
   hasTimeBasedEncounters(): boolean { return true; }
   hasWildAltFormes(): boolean { return false; }
 
-  randomizeWildHeldItems(settings: Settings): void {
-    const banBadItems = settings.banBadRandomWildPokemonHeldItems;
-    const pokemon = this.getPokemonInclFormes().filter((p): p is Pokemon => p != null);
-    const possibleItems = banBadItems ? this.getNonBadItems() : this.getAllowedItems();
-    for (const pk of pokemon) {
-      if (pk.guaranteedHeldItem === -1 && pk.commonHeldItem === -1 && pk.rareHeldItem === -1
-          && pk.darkGrassHeldItem === -1) { return; }
-      let canHaveDarkGrass = pk.darkGrassHeldItem !== -1;
-      if (pk.guaranteedHeldItem !== -1) {
-        if (pk.guaranteedHeldItem > 0) {
-          const decision = this.random.nextDouble();
-          if (decision < 0.9) {
-            canHaveDarkGrass = false;
-            pk.guaranteedHeldItem = possibleItems.randomItem(() => this.random.nextDouble());
-          } else {
-            pk.guaranteedHeldItem = 0;
-            pk.commonHeldItem = possibleItems.randomItem(() => this.random.nextDouble());
-            pk.rareHeldItem = possibleItems.randomItem(() => this.random.nextDouble());
-            while (pk.rareHeldItem === pk.commonHeldItem) { pk.rareHeldItem = possibleItems.randomItem(() => this.random.nextDouble()); }
-          }
-        } else {
-          const decision = this.random.nextDouble();
-          if (decision < 0.5) { pk.commonHeldItem = 0; pk.rareHeldItem = 0; }
-          else if (decision < 0.65) { pk.commonHeldItem = 0; pk.rareHeldItem = possibleItems.randomItem(() => this.random.nextDouble()); }
-          else if (decision < 0.8) { pk.commonHeldItem = possibleItems.randomItem(() => this.random.nextDouble()); pk.rareHeldItem = 0; }
-          else if (decision < 0.95) {
-            pk.commonHeldItem = possibleItems.randomItem(() => this.random.nextDouble());
-            pk.rareHeldItem = possibleItems.randomItem(() => this.random.nextDouble());
-            while (pk.rareHeldItem === pk.commonHeldItem) { pk.rareHeldItem = possibleItems.randomItem(() => this.random.nextDouble()); }
-          } else {
-            canHaveDarkGrass = false;
-            pk.guaranteedHeldItem = possibleItems.randomItem(() => this.random.nextDouble());
-            pk.commonHeldItem = 0; pk.rareHeldItem = 0;
-          }
-        }
-      } else {
-        const decision = this.random.nextDouble();
-        if (decision < 0.5) { pk.commonHeldItem = 0; pk.rareHeldItem = 0; }
-        else if (decision < 0.65) { pk.commonHeldItem = 0; pk.rareHeldItem = possibleItems.randomItem(() => this.random.nextDouble()); }
-        else if (decision < 0.8) { pk.commonHeldItem = possibleItems.randomItem(() => this.random.nextDouble()); pk.rareHeldItem = 0; }
-        else {
-          pk.commonHeldItem = possibleItems.randomItem(() => this.random.nextDouble());
-          pk.rareHeldItem = possibleItems.randomItem(() => this.random.nextDouble());
-          while (pk.rareHeldItem === pk.commonHeldItem) { pk.rareHeldItem = possibleItems.randomItem(() => this.random.nextDouble()); }
-        }
-      }
-      if (canHaveDarkGrass) {
-        if (this.random.nextDouble() < 0.5) { pk.darkGrassHeldItem = possibleItems.randomItem(() => this.random.nextDouble()); }
-        else { pk.darkGrassHeldItem = 0; }
-      } else if (pk.darkGrassHeldItem !== -1) { pk.darkGrassHeldItem = 0; }
-    }
-  }
+  // randomizeWildHeldItems inherited from AbstractRomHandler
 
   enableGuaranteedPokemonCatching(): void {
     const prefix = this.getString('GuaranteedCatchPrefix');
@@ -2075,7 +2024,7 @@ export class Gen2RomHandler extends AbstractGBCRomHandler {
       writeWord(this.rom, menuOffset, this.makeGBPointer(menuNewSpace));
     }
   }
-  randomizeMoveTutorMoves(_settings: Settings): void {}
+  // randomizeMoveTutorMoves inherited from AbstractRomHandler
   getMoveTutorCompatibility(): Map<Pokemon, boolean[]> {
     if (!this.romEntryFull.isCrystal) return new Map();
     const compat = new Map<Pokemon, boolean[]>();
@@ -2109,7 +2058,7 @@ export class Gen2RomHandler extends AbstractGBCRomHandler {
       this.rom[baseStatsOffset + Gen2Constants.bsMTCompatOffset] = mtByte & 0xff;
     }
   }
-  randomizeMoveTutorCompatibility(_settings: Settings): void {}
+  // randomizeMoveTutorCompatibility inherited from AbstractRomHandler
   fullMoveTutorCompatibility(): void {}
   ensureMoveTutorCompatSanity(): void {}
   ensureMoveTutorEvolutionSanity(): void {}
@@ -2181,138 +2130,8 @@ export class Gen2RomHandler extends AbstractGBCRomHandler {
       }
     }
   }
-  randomizeEggMoves(_settings: Settings): void {}
-  getMoveSelectionPoolAtLevel(
-    tp: TrainerPokemon,
-    cyclicEvolutions: boolean,
-  ): Move[] {
-    const allMoves = this.getMoves();
-    const eggMoveProbability = 0.1;
-    const preEvoMoveProbability = 0.5;
-    const tmMoveProbability = 0.6;
-    const tutorMoveProbability = 0.6;
-
-    const levelUpMoves = this.getMovesLearnt();
-    const eggMoveData = this.getEggMoves();
-    const tmCompatMap = this.getTMHMCompatibility();
-    const tmMoveList = this.getTMMoves();
-    const tutorCompatMap = this.hasMoveTutors()
-      ? this.getMoveTutorCompatibility()
-      : null;
-    const tutorMoveList = this.getMoveTutorMoves();
-
-    const pk = this.getAltFormeOfPokemon(tp.pokemon, tp.forme);
-
-    // Level-up Moves
-    const pkMovesets = levelUpMoves.get(pk.number) || [];
-    const movePool: Move[] = [];
-    const seen = new Set<number>();
-    for (const ml of pkMovesets) {
-      if (
-        (ml.level <= tp.level && ml.level !== 0) ||
-        (ml.level === 0 && tp.level >= 30)
-      ) {
-        if (!seen.has(ml.move) && allMoves[ml.move]) {
-          seen.add(ml.move);
-          movePool.push(allMoves[ml.move]!);
-        }
-      }
-    }
-
-    // Pre-Evo Moves
-    if (!cyclicEvolutions) {
-      let preEvo: Pokemon = tp.pokemon;
-      while (preEvo.evolutionsTo.length > 0) {
-        preEvo = preEvo.evolutionsTo[0].from;
-        const preEvoMoveList = levelUpMoves.get(preEvo.number) || [];
-        for (const ml of preEvoMoveList) {
-          if (
-            ml.level <= tp.level &&
-            this.random.nextDouble() < preEvoMoveProbability
-          ) {
-            if (!seen.has(ml.move) && allMoves[ml.move]) {
-              seen.add(ml.move);
-              movePool.push(allMoves[ml.move]!);
-            }
-          }
-        }
-      }
-    }
-
-    // TM Moves
-    const pkTmCompat = tmCompatMap.get(pk);
-    if (pkTmCompat) {
-      for (let idx = 0; idx < tmMoveList.length; idx++) {
-        const tmMove = tmMoveList[idx];
-        if (pkTmCompat[idx + 1]) {
-          const thisMove = allMoves[tmMove];
-          if (!thisMove) continue;
-          if (
-            thisMove.power > 1 &&
-            tp.level * 3 > thisMove.power * thisMove.hitCount &&
-            this.random.nextDouble() < tmMoveProbability
-          ) {
-            movePool.push(thisMove);
-          } else if (
-            (thisMove.power <= 1 && this.random.nextInt(100) < tp.level) ||
-            this.random.nextInt(200) < tp.level
-          ) {
-            movePool.push(thisMove);
-          }
-        }
-      }
-    }
-
-    // Move Tutor Moves
-    if (this.hasMoveTutors() && tutorCompatMap) {
-      const pkTutorCompat = tutorCompatMap.get(pk);
-      if (pkTutorCompat) {
-        for (let idx = 0; idx < tutorMoveList.length; idx++) {
-          const tutorMove = tutorMoveList[idx];
-          if (pkTutorCompat[idx + 1]) {
-            const thisMove = allMoves[tutorMove];
-            if (!thisMove) continue;
-            if (
-              thisMove.power > 1 &&
-              tp.level * 3 > thisMove.power * thisMove.hitCount &&
-              this.random.nextDouble() < tutorMoveProbability
-            ) {
-              movePool.push(thisMove);
-            } else if (
-              (thisMove.power <= 1 && this.random.nextInt(100) < tp.level) ||
-              this.random.nextInt(200) < tp.level
-            ) {
-              movePool.push(thisMove);
-            }
-          }
-        }
-      }
-    }
-
-    // Egg Moves
-    if (!cyclicEvolutions) {
-      let firstEvo: Pokemon = tp.pokemon;
-      while (firstEvo.evolutionsTo.length > 0) {
-        firstEvo = firstEvo.evolutionsTo[0].from;
-      }
-      const eggMoveList = eggMoveData.get(firstEvo.number);
-      if (eggMoveList) {
-        for (const egm of eggMoveList) {
-          if (this.random.nextDouble() < eggMoveProbability && allMoves[egm]) {
-            movePool.push(allMoves[egm]!);
-          }
-        }
-      }
-    }
-
-    // Return distinct moves
-    const distinctSeen = new Set<number>();
-    return movePool.filter((m) => {
-      if (distinctSeen.has(m.number)) return false;
-      distinctSeen.add(m.number);
-      return true;
-    });
-  }
+  // randomizeEggMoves inherited from AbstractRomHandler
+  // getMoveSelectionPoolAtLevel inherited from AbstractRomHandler
 
   // -- Items/Trades (Stream 5) --
   getItemNames(): string[] { return this.itemNames; }

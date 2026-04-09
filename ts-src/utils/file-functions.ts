@@ -93,7 +93,16 @@ export class FileFunctions {
       "config",
       filename
     );
-    return fs.readFileSync(configPath);
+    if (fs.existsSync(configPath)) {
+      return fs.readFileSync(configPath);
+    }
+    // Fallback: look in Java source config directory
+    const javaConfigPath = path.resolve(
+      __dirname,
+      "../../src/com/dabomstew/pkrandom/config",
+      filename
+    );
+    return fs.readFileSync(javaConfigPath);
   }
 
   static readFullLong(data: Uint8Array, offset: number): bigint {

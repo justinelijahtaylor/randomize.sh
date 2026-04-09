@@ -1378,7 +1378,7 @@ export abstract class AbstractRomHandler implements RomHandler {
     this.copyUpEvolutionsHelper4(bpAction, epAction, null, false);
   }
 
-  private copyUpEvolutionsHelper4(
+  protected copyUpEvolutionsHelper4(
     bpAction: BasePokemonAction,
     epAction: EvolvedPokemonAction,
     splitAction: EvolvedPokemonAction | null,
@@ -1458,6 +1458,14 @@ export abstract class AbstractRomHandler implements RomHandler {
 
   protected addEvoUpdateCondensed(evolutionUpdates: Set<EvolutionUpdate>, evo: Evolution, additional: boolean): void {
     evolutionUpdates.add(new EvolutionUpdate(evo.from, evo.to, EvolutionType.LEVEL, String(evo.extraInfo), true, additional));
+  }
+
+  protected addEvoUpdateHappiness(evolutionUpdates: Set<EvolutionUpdate>, evo: Evolution): void {
+    evolutionUpdates.add(new EvolutionUpdate(evo.from, evo.to, EvolutionType.HAPPINESS, '', false, false));
+  }
+
+  protected addEvoUpdateHeldItem(evolutionUpdates: Set<EvolutionUpdate>, evo: Evolution, item: string): void {
+    evolutionUpdates.add(new EvolutionUpdate(evo.from, evo.to, EvolutionType.LEVEL_ITEM_DAY, item, false, false));
   }
 
   private evoCycleCheck(from: Pokemon, to: Pokemon): boolean {
@@ -2712,7 +2720,69 @@ export abstract class AbstractRomHandler implements RomHandler {
     this.setEncounters(useTimeOfDay, currentEncounters);
   }
   abstract hasWildAltFormes(): boolean;
-  abstract randomizeWildHeldItems(settings: Settings): void;
+  randomizeWildHeldItems(settings: Settings): void {
+    const banBadItems = settings.banBadRandomWildPokemonHeldItems;
+    const pokemon = this.getPokemonInclFormes().filter((p): p is Pokemon => p != null);
+    const possibleItems = banBadItems ? this.getNonBadItems() : this.getAllowedItems();
+    for (const pk of pokemon) {
+      if (pk.guaranteedHeldItem === -1 && pk.commonHeldItem === -1 && pk.rareHeldItem === -1
+          && pk.darkGrassHeldItem === -1) { return; }
+      let canHaveDarkGrass = pk.darkGrassHeldItem !== -1;
+      if (pk.guaranteedHeldItem !== -1) {
+        if (pk.guaranteedHeldItem > 0) {
+          const decision = this.random.nextDouble();
+          if (decision < 0.9) {
+            canHaveDarkGrass = false;
+            pk.guaranteedHeldItem = possibleItems.randomItem(() => this.random.nextDouble());
+          } else {
+            pk.guaranteedHeldItem = 0;
+            pk.commonHeldItem = possibleItems.randomItem(() => this.random.nextDouble());
+            pk.rareHeldItem = possibleItems.randomItem(() => this.random.nextDouble());
+            while (pk.rareHeldItem === pk.commonHeldItem) {
+              pk.rareHeldItem = possibleItems.randomItem(() => this.random.nextDouble());
+            }
+          }
+        } else {
+          const decision = this.random.nextDouble();
+          if (decision < 0.5) { pk.commonHeldItem = 0; pk.rareHeldItem = 0; }
+          else if (decision < 0.65) { pk.commonHeldItem = 0; pk.rareHeldItem = possibleItems.randomItem(() => this.random.nextDouble()); }
+          else if (decision < 0.8) { pk.commonHeldItem = possibleItems.randomItem(() => this.random.nextDouble()); pk.rareHeldItem = 0; }
+          else if (decision < 0.95) {
+            pk.commonHeldItem = possibleItems.randomItem(() => this.random.nextDouble());
+            pk.rareHeldItem = possibleItems.randomItem(() => this.random.nextDouble());
+            while (pk.rareHeldItem === pk.commonHeldItem) {
+              pk.rareHeldItem = possibleItems.randomItem(() => this.random.nextDouble());
+            }
+          } else {
+            canHaveDarkGrass = false;
+            pk.guaranteedHeldItem = possibleItems.randomItem(() => this.random.nextDouble());
+            pk.commonHeldItem = 0; pk.rareHeldItem = 0;
+          }
+        }
+      } else {
+        const decision = this.random.nextDouble();
+        if (decision < 0.5) { pk.commonHeldItem = 0; pk.rareHeldItem = 0; }
+        else if (decision < 0.65) { pk.commonHeldItem = 0; pk.rareHeldItem = possibleItems.randomItem(() => this.random.nextDouble()); }
+        else if (decision < 0.8) { pk.commonHeldItem = possibleItems.randomItem(() => this.random.nextDouble()); pk.rareHeldItem = 0; }
+        else {
+          pk.commonHeldItem = possibleItems.randomItem(() => this.random.nextDouble());
+          pk.rareHeldItem = possibleItems.randomItem(() => this.random.nextDouble());
+          while (pk.rareHeldItem === pk.commonHeldItem) {
+            pk.rareHeldItem = possibleItems.randomItem(() => this.random.nextDouble());
+          }
+        }
+      }
+      if (canHaveDarkGrass) {
+        if (this.random.nextDouble() < 0.5) {
+          pk.darkGrassHeldItem = possibleItems.randomItem(() => this.random.nextDouble());
+        } else {
+          pk.darkGrassHeldItem = 0;
+        }
+      } else if (pk.darkGrassHeldItem !== -1) {
+        pk.darkGrassHeldItem = 0;
+      }
+    }
+  }
   changeCatchRates(settings: Settings): void {
     const minimumCatchRateLevel = settings.minimumCatchRateLevel;
 
@@ -2894,10 +2964,147 @@ export abstract class AbstractRomHandler implements RomHandler {
   doubleBattleMode(): void {
     // No-op by default; can be overridden
   }
-  abstract getMoveSelectionPoolAtLevel(
+  getMoveSelectionPoolAtLevel(
     tp: TrainerPokemon,
     cyclicEvolutions: boolean
-  ): Move[];
+  ): Move[] {
+    const allMoves = this.getMoves();
+    const eggMoveProbability = 0.1;
+    const preEvoMoveProbability = 0.5;
+    const tmMoveProbability = 0.6;
+    const tutorMoveProbability = 0.6;
+
+    const levelUpMoves = this.getMovesLearnt();
+    const eggMoveData = this.getEggMoves();
+    const tmCompatMap = this.getTMHMCompatibility();
+    const tmMoveList = this.getTMMoves();
+    const tutorCompatMap = this.hasMoveTutors()
+      ? this.getMoveTutorCompatibility()
+      : null;
+    const tutorMoveList = this.getMoveTutorMoves();
+
+    const pk = this.getAltFormeOfPokemon(tp.pokemon, tp.forme);
+
+    // Level-up Moves
+    const pkMovesets = levelUpMoves.get(pk.number) || [];
+    const movePool: Move[] = [];
+    const seen = new Set<number>();
+    for (const ml of pkMovesets) {
+      if (
+        (ml.level <= tp.level && ml.level !== 0) ||
+        (ml.level === 0 && tp.level >= 30)
+      ) {
+        if (!seen.has(ml.move) && allMoves[ml.move]) {
+          seen.add(ml.move);
+          movePool.push(allMoves[ml.move]!);
+        }
+      }
+    }
+
+    // Pre-Evo Moves
+    if (!cyclicEvolutions) {
+      let preEvo: Pokemon;
+      if (this.altFormesCanHaveDifferentEvolutions()) {
+        preEvo = this.getAltFormeOfPokemon(tp.pokemon, tp.forme);
+      } else {
+        preEvo = tp.pokemon;
+      }
+      while (preEvo.evolutionsTo.length > 0) {
+        preEvo = preEvo.evolutionsTo[0].from;
+        const preEvoMoveList = levelUpMoves.get(preEvo.number) || [];
+        for (const ml of preEvoMoveList) {
+          if (
+            ml.level <= tp.level &&
+            this.random.nextDouble() < preEvoMoveProbability
+          ) {
+            if (!seen.has(ml.move) && allMoves[ml.move]) {
+              seen.add(ml.move);
+              movePool.push(allMoves[ml.move]!);
+            }
+          }
+        }
+      }
+    }
+
+    // TM Moves
+    const pkTmCompat = tmCompatMap.get(pk);
+    if (pkTmCompat) {
+      for (let idx = 0; idx < tmMoveList.length; idx++) {
+        const tmMove = tmMoveList[idx];
+        if (pkTmCompat[idx + 1]) {
+          const thisMove = allMoves[tmMove];
+          if (!thisMove) continue;
+          if (
+            thisMove.power > 1 &&
+            tp.level * 3 > thisMove.power * thisMove.hitCount &&
+            this.random.nextDouble() < tmMoveProbability
+          ) {
+            movePool.push(thisMove);
+          } else if (
+            (thisMove.power <= 1 && this.random.nextInt(100) < tp.level) ||
+            this.random.nextInt(200) < tp.level
+          ) {
+            movePool.push(thisMove);
+          }
+        }
+      }
+    }
+
+    // Move Tutor Moves
+    if (this.hasMoveTutors() && tutorCompatMap) {
+      const pkTutorCompat = tutorCompatMap.get(pk);
+      if (pkTutorCompat) {
+        for (let idx = 0; idx < tutorMoveList.length; idx++) {
+          const tutorMove = tutorMoveList[idx];
+          if (pkTutorCompat[idx + 1]) {
+            const thisMove = allMoves[tutorMove];
+            if (!thisMove) continue;
+            if (
+              thisMove.power > 1 &&
+              tp.level * 3 > thisMove.power * thisMove.hitCount &&
+              this.random.nextDouble() < tutorMoveProbability
+            ) {
+              movePool.push(thisMove);
+            } else if (
+              (thisMove.power <= 1 && this.random.nextInt(100) < tp.level) ||
+              this.random.nextInt(200) < tp.level
+            ) {
+              movePool.push(thisMove);
+            }
+          }
+        }
+      }
+    }
+
+    // Egg Moves
+    if (!cyclicEvolutions) {
+      let firstEvo: Pokemon;
+      if (this.altFormesCanHaveDifferentEvolutions()) {
+        firstEvo = this.getAltFormeOfPokemon(tp.pokemon, tp.forme);
+      } else {
+        firstEvo = tp.pokemon;
+      }
+      while (firstEvo.evolutionsTo.length > 0) {
+        firstEvo = firstEvo.evolutionsTo[0].from;
+      }
+      const eggMoveList = eggMoveData.get(firstEvo.number);
+      if (eggMoveList) {
+        for (const egm of eggMoveList) {
+          if (this.random.nextDouble() < eggMoveProbability && allMoves[egm]) {
+            movePool.push(allMoves[egm]!);
+          }
+        }
+      }
+    }
+
+    // Return distinct moves
+    const distinctSeen = new Set<number>();
+    return movePool.filter((m) => {
+      if (distinctSeen.has(m.number)) return false;
+      distinctSeen.add(m.number);
+      return true;
+    });
+  }
   pickTrainerMovesets(settings: Settings): void {
     const isCyclicEvolutions =
       settings.evolutionsMod === EvolutionsMod.RANDOM_EVERY_LEVEL;
@@ -3607,7 +3814,109 @@ export abstract class AbstractRomHandler implements RomHandler {
     }
     this.setMovesLearnt(movesets);
   }
-  abstract randomizeEggMoves(settings: Settings): void;
+  randomizeEggMoves(settings: Settings): void {
+    const typeThemed = settings.movesetsMod === MovesetsMod.RANDOM_PREFER_SAME_TYPE;
+    const noBroken = settings.blockBrokenMovesetMoves;
+    const goodDamagingPercentage =
+      settings.movesetsForceGoodDamaging ? settings.movesetsGoodDamagingPercent / 100.0 : 0;
+
+    const movesets = this.getEggMoves();
+
+    const validMoves: Move[] = [];
+    const validDamagingMoves: Move[] = [];
+    const validTypeMoves = new Map<Type, Move[]>();
+    const validTypeDamagingMoves = new Map<Type, Move[]>();
+    this.createSetsOfMoves(noBroken, validMoves, validDamagingMoves, validTypeMoves, validTypeDamagingMoves);
+
+    for (const [pkmnNum, moves] of movesets) {
+      const learnt: number[] = [];
+      const pkmn = this.findPokemonInPoolWithSpeciesID(this.mainPokemonListInclFormes, pkmnNum);
+      if (pkmn == null) continue;
+
+      const atkSpAtkRatio = pkmn.getAttackSpecialAttackRatio();
+
+      if (pkmn.actuallyCosmetic) {
+        const baseMoves = movesets.get(pkmn.baseForme!.number);
+        if (baseMoves) {
+          for (let i = 0; i < moves.length; i++) {
+            moves[i] = baseMoves[i];
+          }
+        }
+        continue;
+      }
+
+      let goodDamagingLeft = Math.round(goodDamagingPercentage * moves.length);
+
+      for (let i = 0; i < moves.length; i++) {
+        const attemptDamaging = goodDamagingLeft > 0;
+
+        let typeOfMove: Type | null = null;
+        if (typeThemed) {
+          const picked = this.random.nextDouble();
+          if (
+            (pkmn.primaryType === Type.NORMAL && pkmn.secondaryType != null) ||
+            (pkmn.secondaryType === Type.NORMAL)
+          ) {
+            const otherType = pkmn.primaryType === Type.NORMAL ? pkmn.secondaryType! : pkmn.primaryType;
+            if (picked < 0.1) typeOfMove = Type.NORMAL;
+            else if (picked < 0.4) typeOfMove = otherType;
+          } else if (pkmn.secondaryType != null) {
+            if (picked < 0.2) typeOfMove = pkmn.primaryType;
+            else if (picked < 0.4) typeOfMove = pkmn.secondaryType;
+          } else {
+            if (picked < 0.4) typeOfMove = pkmn.primaryType;
+          }
+        }
+
+        let pickList = validMoves;
+        if (attemptDamaging) {
+          if (typeOfMove != null) {
+            if (
+              validTypeDamagingMoves.has(typeOfMove) &&
+              this.checkForUnusedMove(validTypeDamagingMoves.get(typeOfMove)!, learnt)
+            ) {
+              pickList = validTypeDamagingMoves.get(typeOfMove)!;
+            } else if (this.checkForUnusedMove(validDamagingMoves, learnt)) {
+              pickList = validDamagingMoves;
+            }
+          } else if (this.checkForUnusedMove(validDamagingMoves, learnt)) {
+            pickList = validDamagingMoves;
+          }
+          const forcedCategory =
+            this.random.nextDouble() < atkSpAtkRatio ? MoveCategory.PHYSICAL : MoveCategory.SPECIAL;
+          const filteredList = pickList.filter((mv) => mv.category === forcedCategory);
+          if (filteredList.length > 0 && this.checkForUnusedMove(filteredList, learnt)) {
+            pickList = filteredList;
+          }
+        } else if (typeOfMove != null) {
+          if (
+            validTypeMoves.has(typeOfMove) &&
+            this.checkForUnusedMove(validTypeMoves.get(typeOfMove)!, learnt)
+          ) {
+            pickList = validTypeMoves.get(typeOfMove)!;
+          }
+        }
+
+        let mv = pickList[this.random.nextInt(pickList.length)];
+        while (learnt.includes(mv.number)) {
+          mv = pickList[this.random.nextInt(pickList.length)];
+        }
+
+        goodDamagingLeft--;
+        learnt.push(mv.number);
+      }
+
+      // Shuffle learnt moves
+      for (let i = learnt.length - 1; i > 0; i--) {
+        const j = this.random.nextInt(i + 1);
+        [learnt[i], learnt[j]] = [learnt[j], learnt[i]];
+      }
+      for (let i = 0; i < learnt.length; i++) {
+        moves[i] = learnt[i];
+      }
+    }
+    this.setEggMoves(movesets);
+  }
 
   orderDamagingMovesByDamage(): void {
     const movesets = this.getMovesLearnt();
@@ -4188,12 +4497,142 @@ export abstract class AbstractRomHandler implements RomHandler {
   abstract hasMoveTutors(): boolean;
   abstract getMoveTutorMoves(): number[];
   abstract setMoveTutorMoves(moves: number[]): void;
-  abstract randomizeMoveTutorMoves(settings: Settings): void;
+  randomizeMoveTutorMoves(settings: Settings): void {
+    if (!this.hasMoveTutors()) return;
+
+    const noBroken = settings.blockBrokenTutorMoves;
+    const preserveField = settings.keepFieldMoveTutors;
+    const goodDamagingPercentage = settings.tutorsForceGoodDamaging
+      ? settings.tutorsGoodDamagingPercent / 100.0
+      : 0;
+
+    const allMoves = this.getMoves();
+    const tms = this.getTMMoves();
+    const oldMTs = this.getMoveTutorMoves();
+    const mtCount = oldMTs.length;
+    const hms = this.getHMMoves();
+
+    const banned = new Set<number>(noBroken ? this.getGameBreakingMoves() : []);
+    for (const b of this.getMovesBannedFromLevelup()) banned.add(b);
+    for (const il of this.getIllegalMoves()) banned.add(il);
+
+    const fieldMoves = this.getFieldMoves();
+    let preservedFieldMoveCount = 0;
+    if (preserveField) {
+      const existingFieldTutors = oldMTs.filter((mt) => fieldMoves.includes(mt));
+      preservedFieldMoveCount = existingFieldTutors.length;
+      for (const fm of existingFieldTutors) banned.add(fm);
+    }
+
+    const usableMoves: Move[] = [];
+    const usableDamagingMoves: Move[] = [];
+
+    for (let i = 1; i < allMoves.length; i++) {
+      const mv = allMoves[i];
+      if (mv == null) continue;
+      if (
+        GlobalConstants.bannedRandomMoves[mv.number] ||
+        GlobalConstants.zMoves.includes(mv.number) ||
+        tms.includes(mv.number) ||
+        hms.includes(mv.number) ||
+        banned.has(mv.number)
+      ) {
+        continue;
+      }
+      usableMoves.push(mv);
+      if (
+        !GlobalConstants.bannedForDamagingMove[mv.number] &&
+        mv.isGoodDamaging(this.perfectAccuracy)
+      ) {
+        usableDamagingMoves.push(mv);
+      }
+    }
+
+    const pickedMoves: number[] = [];
+    let goodDamagingLeft = Math.round(
+      goodDamagingPercentage * (mtCount - preservedFieldMoveCount)
+    );
+
+    for (let i = 0; i < mtCount - preservedFieldMoveCount; i++) {
+      let chosenMove: Move;
+      if (goodDamagingLeft > 0 && usableDamagingMoves.length > 0) {
+        chosenMove = usableDamagingMoves[this.random.nextInt(usableDamagingMoves.length)];
+      } else {
+        chosenMove = usableMoves[this.random.nextInt(usableMoves.length)];
+      }
+      pickedMoves.push(chosenMove.number);
+      const uIdx = usableMoves.indexOf(chosenMove);
+      if (uIdx >= 0) usableMoves.splice(uIdx, 1);
+      const dIdx = usableDamagingMoves.indexOf(chosenMove);
+      if (dIdx >= 0) usableDamagingMoves.splice(dIdx, 1);
+      goodDamagingLeft--;
+    }
+
+    this.shuffleArray(pickedMoves);
+
+    let pickedMoveIndex = 0;
+    const newMTs: number[] = [];
+    for (const oldMT of oldMTs) {
+      if (preserveField && fieldMoves.includes(oldMT)) {
+        newMTs.push(oldMT);
+      } else {
+        newMTs.push(pickedMoves[pickedMoveIndex++]);
+      }
+    }
+
+    this.setMoveTutorMoves(newMTs);
+  }
   abstract getMoveTutorCompatibility(): Map<Pokemon, boolean[]>;
   abstract setMoveTutorCompatibility(
     compatData: Map<Pokemon, boolean[]>
   ): void;
-  abstract randomizeMoveTutorCompatibility(settings: Settings): void;
+  randomizeMoveTutorCompatibility(settings: Settings): void {
+    const preferSameType = settings.moveTutorsCompatibilityMod === MoveTutorsCompatibilityMod.RANDOM_PREFER_TYPE;
+    const followEvolutions = settings.tutorFollowEvolutions;
+
+    if (!this.hasMoveTutors()) return;
+
+    const compat = this.getMoveTutorCompatibility();
+    const mts = this.getMoveTutorMoves();
+
+    const priorityTutors: number[] = [];
+
+    if (followEvolutions) {
+      this.copyUpEvolutionsHelper4(
+        (pk: Pokemon) =>
+          this.randomizePokemonMoveCompatibility(
+            pk,
+            compat.get(pk)!,
+            mts,
+            priorityTutors,
+            preferSameType
+          ),
+        (evFrom: Pokemon, evTo: Pokemon, _toMonIsFinalEvo: boolean) =>
+          this.copyPokemonMoveCompatibilityUpEvolutions(
+            evFrom,
+            evTo,
+            compat.get(evFrom)!,
+            compat.get(evTo)!,
+            mts,
+            preferSameType
+          ),
+        null,
+        true
+      );
+    } else {
+      for (const [pk, flags] of compat) {
+        this.randomizePokemonMoveCompatibility(
+          pk,
+          flags,
+          mts,
+          priorityTutors,
+          preferSameType
+        );
+      }
+    }
+
+    this.setMoveTutorCompatibility(compat);
+  }
   abstract fullMoveTutorCompatibility(): void;
   abstract ensureMoveTutorCompatSanity(): void;
   abstract ensureMoveTutorEvolutionSanity(): void;

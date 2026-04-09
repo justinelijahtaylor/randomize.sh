@@ -15,12 +15,14 @@ import { FileFunctions } from "../utils/file-functions";
 import { Gen1RomHandlerFactory } from "../romhandlers/gen1-rom-handler";
 import { Gen2RomHandlerFactory } from "../romhandlers/gen2-rom-handler";
 import { Gen3RomHandlerFactory } from "../romhandlers/gen3-rom-handler";
+import { Gen4RomHandlerFactory } from "../romhandlers/gen4-rom-handler";
 
 /**
  * Parsed CLI arguments.
  */
 export interface CliArgs {
   settingsFilePath: string | null;
+  settingsString: string | null;
   sourceRomFilePath: string | null;
   outputRomFilePath: string | null;
   saveAsDirectory: boolean;
@@ -44,7 +46,7 @@ export interface CliRomHandlerFactory {
  * The CLI accepts these via dependency injection for testability.
  */
 export function getDefaultFactories(): RomHandlerFactory[] {
-  return [new Gen1RomHandlerFactory(), new Gen2RomHandlerFactory(), new Gen3RomHandlerFactory()];
+  return [new Gen1RomHandlerFactory(), new Gen2RomHandlerFactory(), new Gen3RomHandlerFactory(), new Gen4RomHandlerFactory()];
 }
 
 function printError(
@@ -65,10 +67,15 @@ function printUsage(
   stderr: (msg: string) => void = (msg) => process.stderr.write(msg + "\n"),
 ): void {
   stderr(
-    "Usage: randomizer-cli -s <path to settings file> " +
-      "-i <path to source ROM> -o <path for new ROM> [-d][-u <path to 3DS game update>][-l]",
+    "Usage: randomizer-cli (-s <settings file> | -ss <settings string>) " +
+      "-i <source ROM> -o <output ROM> [-l][-d][-u <3DS update>]",
   );
-  stderr("-d: Save 3DS game as directory (LayeredFS)");
+  stderr("  -s   Path to a binary settings file");
+  stderr("  -ss  Settings string (from Java GUI, with or without 3-digit version prefix)");
+  stderr("  -i   Path to source ROM");
+  stderr("  -o   Path for output ROM");
+  stderr("  -l   Save randomization log alongside output");
+  stderr("  -d   Save 3DS game as directory (LayeredFS)");
 }
 
 /**
@@ -77,6 +84,7 @@ function printUsage(
 export function parseArgs(args: string[]): CliArgs {
   const result: CliArgs = {
     settingsFilePath: null,
+    settingsString: null,
     sourceRomFilePath: null,
     outputRomFilePath: null,
     saveAsDirectory: false,
@@ -85,25 +93,33 @@ export function parseArgs(args: string[]): CliArgs {
     showHelp: false,
   };
 
-  const allowedFlags = ["-i", "-o", "-s", "-d", "-u", "-l", "--help"];
+  const allowedFlags = ["-i", "-o", "-s", "-ss", "-d", "-u", "-l", "--help"];
 
   for (let i = 0; i < args.length; i++) {
     if (allowedFlags.includes(args[i])) {
       switch (args[i]) {
         case "-i":
           result.sourceRomFilePath = args[i + 1] ?? null;
+          i++;
           break;
         case "-o":
           result.outputRomFilePath = args[i + 1] ?? null;
+          i++;
+          break;
+        case "-ss":
+          result.settingsString = args[i + 1] ?? null;
+          i++;
           break;
         case "-s":
           result.settingsFilePath = args[i + 1] ?? null;
+          i++;
           break;
         case "-d":
           result.saveAsDirectory = true;
           break;
         case "-u":
           result.updateFilePath = args[i + 1] ?? null;
+          i++;
           break;
         case "-l":
           result.saveLog = true;
@@ -121,7 +137,7 @@ export function parseArgs(args: string[]): CliArgs {
 /**
  * Perform the actual randomization process.
  *
- * @param settingsFilePath - Path to the settings file
+ * @param settingsSource - Path to settings file, or an already-parsed Settings object
  * @param sourceRomFilePath - Path to the source ROM
  * @param destinationRomFilePath - Path for the output ROM
  * @param saveAsDirectory - Whether to save as a directory (LayeredFS for 3DS)
@@ -133,7 +149,7 @@ export function parseArgs(args: string[]): CliArgs {
  * @returns true if randomization succeeded, false otherwise
  */
 export function performDirectRandomization(
-  settingsFilePath: string,
+  settingsSource: string | Settings,
   sourceRomFilePath: string,
   destinationRomFilePath: string,
   saveAsDirectory: boolean,
@@ -146,10 +162,12 @@ export function performDirectRandomization(
   // Load settings
   let settings: Settings;
   try {
-    const data = new Uint8Array(fs.readFileSync(settingsFilePath));
-    settings = Settings.read(data);
-    // In the full port, customNames would be set here:
-    // settings.customNames = FileFunctions.getCustomNames();
+    if (settingsSource instanceof Settings) {
+      settings = settingsSource;
+    } else {
+      const data = new Uint8Array(fs.readFileSync(settingsSource));
+      settings = Settings.read(data);
+    }
   } catch (ex) {
     stderr(String(ex));
     return false;
@@ -283,7 +301,7 @@ export function invoke(
   }
 
   if (
-    parsed.settingsFilePath === null ||
+    (parsed.settingsFilePath === null && parsed.settingsString === null) ||
     parsed.sourceRomFilePath === null ||
     parsed.outputRomFilePath === null
   ) {
@@ -292,11 +310,27 @@ export function invoke(
     return 1;
   }
 
-  // Validate settings file exists
-  if (!fs.existsSync(parsed.settingsFilePath)) {
-    printError("Could not read settings file", stderr);
-    printUsage(stderr);
-    return 1;
+  // Resolve settings from file or string
+  let settingsSource: string | Settings;
+  if (parsed.settingsString !== null) {
+    try {
+      // Strip 3-digit version prefix if present (Java GUI adds it)
+      let str = parsed.settingsString;
+      if (str.length > 3 && /^\d{3}/.test(str)) {
+        str = str.substring(3);
+      }
+      settingsSource = Settings.fromString(str);
+    } catch (ex) {
+      printError("Invalid settings string: " + String(ex), stderr);
+      return 1;
+    }
+  } else {
+    if (!fs.existsSync(parsed.settingsFilePath!)) {
+      printError("Could not read settings file", stderr);
+      printUsage(stderr);
+      return 1;
+    }
+    settingsSource = parsed.settingsFilePath!;
   }
 
   // Validate source ROM exists
@@ -319,7 +353,7 @@ export function invoke(
   const romFactories = factories ?? getDefaultFactories();
 
   const processResult = performDirectRandomization(
-    parsed.settingsFilePath,
+    settingsSource,
     parsed.sourceRomFilePath,
     parsed.outputRomFilePath,
     parsed.saveAsDirectory,
@@ -337,4 +371,11 @@ export function invoke(
   }
 
   return 0;
+}
+
+// Auto-invoke when run as a script
+const scriptArgs = process.argv.slice(2);
+if (scriptArgs.length > 0) {
+  const exitCode = invoke(scriptArgs);
+  process.exit(exitCode);
 }

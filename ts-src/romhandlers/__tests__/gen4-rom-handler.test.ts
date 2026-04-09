@@ -3,7 +3,9 @@ import {
   Gen4RomHandler,
   detectGen4Rom,
   romTypeFromCode,
+  parseGen4RomEntries,
 } from '../gen4-rom-handler';
+import type { Gen4RomEntry } from '../gen4-rom-handler';
 import * as Gen4Constants from '../../constants/gen4-constants';
 import { NARCArchive } from '../../nds/narc-archive';
 import { Pokemon } from '../../pokemon/pokemon';
@@ -12,14 +14,17 @@ import { MoveCategory } from '../../pokemon/move-category';
 import { StatChangeMoveType } from '../../pokemon/stat-change-move-type';
 import { StatChangeType } from '../../pokemon/stat-change-type';
 import { ExpCurve, expCurveToByte } from '../../pokemon/exp-curve';
+import { RandomSource } from '../../utils/random-source';
 
 // ---------------------------------------------------------------------------
-// Helpers: build synthetic NARC data for Pokemon / Moves
+// Helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Build a minimal Pokemon stat byte array (Gen4 format, 44 bytes).
- */
+function createTestHandler(): Gen4RomHandler {
+  const random = RandomSource.instance();
+  return new Gen4RomHandler(random, null, []);
+}
+
 function buildPokemonStats(opts: {
   hp?: number;
   attack?: number;
@@ -44,26 +49,22 @@ function buildPokemonStats(opts: {
   data[Gen4Constants.bsSpeedOffset] = opts.speed ?? 45;
   data[Gen4Constants.bsSpAtkOffset] = opts.spatk ?? 65;
   data[Gen4Constants.bsSpDefOffset] = opts.spdef ?? 65;
-  data[Gen4Constants.bsPrimaryTypeOffset] = opts.primaryType ?? 0x0C; // GRASS
-  data[Gen4Constants.bsSecondaryTypeOffset] = opts.secondaryType ?? 0x03; // POISON
+  data[Gen4Constants.bsPrimaryTypeOffset] = opts.primaryType ?? 0x0C;
+  data[Gen4Constants.bsSecondaryTypeOffset] = opts.secondaryType ?? 0x03;
   data[Gen4Constants.bsCatchRateOffset] = opts.catchRate ?? 45;
-  data[Gen4Constants.bsGrowthCurveOffset] = opts.growthCurve ?? 3; // MEDIUM_SLOW
+  data[Gen4Constants.bsGrowthCurveOffset] = opts.growthCurve ?? 3;
   data[Gen4Constants.bsAbility1Offset] = opts.ability1 ?? 65;
   data[Gen4Constants.bsAbility2Offset] = opts.ability2 ?? 0;
-  // Held items (little-endian 16-bit)
-  const common = opts.commonHeldItem ?? 0;
-  const rare = opts.rareHeldItem ?? 0;
-  data[Gen4Constants.bsCommonHeldItemOffset] = common & 0xff;
-  data[Gen4Constants.bsCommonHeldItemOffset + 1] = (common >> 8) & 0xff;
-  data[Gen4Constants.bsRareHeldItemOffset] = rare & 0xff;
-  data[Gen4Constants.bsRareHeldItemOffset + 1] = (rare >> 8) & 0xff;
-  data[Gen4Constants.bsGenderRatioOffset] = opts.genderRatio ?? 127;
+  const ci = opts.commonHeldItem ?? 0;
+  const ri = opts.rareHeldItem ?? 0;
+  data[Gen4Constants.bsCommonHeldItemOffset] = ci & 0xff;
+  data[Gen4Constants.bsCommonHeldItemOffset + 1] = (ci >> 8) & 0xff;
+  data[Gen4Constants.bsRareHeldItemOffset] = ri & 0xff;
+  data[Gen4Constants.bsRareHeldItemOffset + 1] = (ri >> 8) & 0xff;
+  data[Gen4Constants.bsGenderRatioOffset] = opts.genderRatio ?? 31;
   return data;
 }
 
-/**
- * Build a minimal Move data byte array (Gen4 format, 12+ bytes).
- */
 function buildMoveData(opts: {
   effectIndex?: number;
   category?: number;
@@ -71,32 +72,29 @@ function buildMoveData(opts: {
   type?: number;
   hitratio?: number;
   pp?: number;
-  secondaryEffectChance?: number;
   target?: number;
-  priority?: number;
+  secondaryEffectChance?: number;
   flags?: number;
+  priority?: number;
 } = {}): Uint8Array {
   const data = new Uint8Array(16);
-  const effectIndex = opts.effectIndex ?? 0;
-  data[0] = effectIndex & 0xff;
-  data[1] = (effectIndex >> 8) & 0xff;
-  data[2] = opts.category ?? 0; // Physical
-  data[3] = opts.power ?? 40;
-  data[4] = opts.type ?? 0x00; // NORMAL
+  const effect = opts.effectIndex ?? 0;
+  data[0] = effect & 0xff;
+  data[1] = (effect >> 8) & 0xff;
+  data[2] = opts.category ?? 0;
+  data[3] = opts.power ?? 0;
+  data[4] = opts.type ?? 0;
   data[5] = opts.hitratio ?? 100;
   data[6] = opts.pp ?? 35;
   data[7] = opts.secondaryEffectChance ?? 0;
-  const target = opts.target ?? 0;
-  data[8] = target & 0xff;
-  data[9] = (target >> 8) & 0xff;
-  data[10] = (opts.priority ?? 0) & 0xff;
+  const tgt = opts.target ?? 0;
+  data[8] = tgt & 0xff;
+  data[9] = (tgt >> 8) & 0xff;
+  data[10] = opts.priority ?? 0;
   data[11] = opts.flags ?? 0;
   return data;
 }
 
-/**
- * Wrap an array of Uint8Arrays into a NARCArchive.
- */
 function wrapFilesInNarc(files: Uint8Array[]): NARCArchive {
   const narc = new NARCArchive();
   for (const f of files) {
@@ -111,31 +109,31 @@ function wrapFilesInNarc(files: Uint8Array[]): NARCArchive {
 
 describe('Gen4RomHandler - ROM detection', () => {
   it('should detect Diamond ROM code', () => {
-    expect(detectGen4Rom('ADAE')).toBe(true);
+    expect(detectGen4Rom('ADAE', 5)).toBe(true);
   });
 
   it('should detect Pearl ROM code', () => {
-    expect(detectGen4Rom('APAJ')).toBe(true);
+    expect(detectGen4Rom('APAE', 5)).toBe(true);
   });
 
   it('should detect Platinum ROM code', () => {
-    expect(detectGen4Rom('CPUE')).toBe(true);
+    expect(detectGen4Rom('CPUE', 0)).toBe(true);
   });
 
   it('should detect HeartGold ROM code', () => {
-    expect(detectGen4Rom('IPKE')).toBe(true);
+    expect(detectGen4Rom('IPKE', 0)).toBe(true);
   });
 
   it('should detect SoulSilver ROM code', () => {
-    expect(detectGen4Rom('IPGE')).toBe(true);
+    expect(detectGen4Rom('IPGE', 0)).toBe(true);
   });
 
   it('should reject unknown ROM code', () => {
-    expect(detectGen4Rom('XXXX')).toBe(false);
+    expect(detectGen4Rom('XXXX', 0)).toBe(false);
   });
 
   it('should reject null ROM code', () => {
-    expect(detectGen4Rom(null)).toBe(false);
+    expect(detectGen4Rom(null, 0)).toBe(false);
   });
 
   it('should determine DP type from code', () => {
@@ -159,7 +157,6 @@ describe('Gen4RomHandler - ROM detection', () => {
 
 describe('Gen4RomHandler - Pokemon stat parsing', () => {
   it('should parse basic pokemon stats from synthetic NARC data', () => {
-    // Build a NARC with index 0 as dummy and index 1 as our test mon
     const dummyFile = new Uint8Array(44);
     const bulbasaurStats = buildPokemonStats({
       hp: 45,
@@ -168,18 +165,16 @@ describe('Gen4RomHandler - Pokemon stat parsing', () => {
       speed: 45,
       spatk: 65,
       spdef: 65,
-      primaryType: 0x0C, // GRASS
-      secondaryType: 0x03, // POISON
+      primaryType: 0x0C,
+      secondaryType: 0x03,
       catchRate: 45,
-      growthCurve: 3, // MEDIUM_SLOW
+      growthCurve: 3,
       ability1: 65,
       ability2: 0,
     });
 
-    // Need at least pokemonCount+1 files, but for testing just pad with dummies
-    const files: Uint8Array[] = [dummyFile]; // index 0
-    files.push(bulbasaurStats); // index 1
-    // Fill remaining with dummies
+    const files: Uint8Array[] = [dummyFile];
+    files.push(bulbasaurStats);
     for (let i = 2; i <= Gen4Constants.pokemonCount; i++) {
       files.push(new Uint8Array(44));
     }
@@ -190,8 +185,8 @@ describe('Gen4RomHandler - Pokemon stat parsing', () => {
       names.push(`Mon${i}`);
     }
 
-    const handler = new Gen4RomHandler();
-    handler.loadPokemonStats(narc, names);
+    const handler = createTestHandler();
+    handler.loadPokemonStatsForTest(narc, names);
 
     const poke = handler.pokes[1];
     expect(poke).not.toBeNull();
@@ -212,11 +207,11 @@ describe('Gen4RomHandler - Pokemon stat parsing', () => {
 
   it('should set secondaryType to null when both types are the same', () => {
     const stats = buildPokemonStats({
-      primaryType: 0x00, // NORMAL
-      secondaryType: 0x00, // NORMAL (same)
+      primaryType: 0x00,
+      secondaryType: 0x00,
     });
 
-    const handler = new Gen4RomHandler();
+    const handler = createTestHandler();
     const pkmn = new Pokemon();
     handler.loadBasicPokeStats(pkmn, stats);
 
@@ -230,7 +225,7 @@ describe('Gen4RomHandler - Pokemon stat parsing', () => {
       rareHeldItem: 200,
     });
 
-    const handler = new Gen4RomHandler();
+    const handler = createTestHandler();
     const pkmn = new Pokemon();
     handler.loadBasicPokeStats(pkmn, stats);
 
@@ -245,7 +240,7 @@ describe('Gen4RomHandler - Pokemon stat parsing', () => {
       rareHeldItem: 150,
     });
 
-    const handler = new Gen4RomHandler();
+    const handler = createTestHandler();
     const pkmn = new Pokemon();
     handler.loadBasicPokeStats(pkmn, stats);
 
@@ -262,22 +257,20 @@ describe('Gen4RomHandler - Pokemon stat parsing', () => {
       speed: 100,
       spatk: 90,
       spdef: 60,
-      primaryType: 0x0A, // FIRE
-      secondaryType: 0x02, // FLYING
+      primaryType: 0x0A,
+      secondaryType: 0x02,
       catchRate: 200,
       ability1: 31,
       ability2: 18,
     });
 
-    const handler = new Gen4RomHandler();
+    const handler = createTestHandler();
     const pkmn = new Pokemon();
     handler.loadBasicPokeStats(pkmn, stats);
 
-    // Now save it back
     const newStats = new Uint8Array(44);
     handler.saveBasicPokeStats(pkmn, newStats);
 
-    // Re-load and verify
     const pkmn2 = new Pokemon();
     handler.loadBasicPokeStats(pkmn2, newStats);
 
@@ -302,19 +295,17 @@ describe('Gen4RomHandler - Pokemon stat parsing', () => {
 describe('Gen4RomHandler - Move data parsing', () => {
   it('should parse basic move data from synthetic NARC', () => {
     const dummyFile = new Uint8Array(16);
-    // Move at index 1: Pound-like move
     const poundData = buildMoveData({
       effectIndex: 0,
-      category: 0, // Physical
+      category: 0,
       power: 40,
-      type: 0x00, // NORMAL
+      type: 0x00,
       hitratio: 100,
       pp: 35,
-      flags: 1, // makes contact
+      flags: 1,
     });
 
     const files: Uint8Array[] = [dummyFile, poundData];
-    // Fill rest with dummy moves
     for (let i = 2; i <= Gen4Constants.moveCount; i++) {
       files.push(new Uint8Array(16));
     }
@@ -325,8 +316,8 @@ describe('Gen4RomHandler - Move data parsing', () => {
       names.push(`Move${i}`);
     }
 
-    const handler = new Gen4RomHandler();
-    handler.loadMoves(narc, names);
+    const handler = createTestHandler();
+    handler.loadMovesForTest(narc, names);
 
     const move = handler.moves[1];
     expect(move).not.toBeNull();
@@ -340,16 +331,16 @@ describe('Gen4RomHandler - Move data parsing', () => {
     expect(move!.makesContact).toBe(true);
   });
 
-  it('should parse move with stat-changing effect (no damage, atk+1)', () => {
+  it('should parse move with stat-changing effect (no damage, atk+2)', () => {
     const dummyFile = new Uint8Array(16);
     const swordsData = buildMoveData({
       effectIndex: Gen4Constants.noDamageAtkPlusTwoEffect,
-      category: 2, // Status
+      category: 2,
       power: 0,
-      type: 0x00, // NORMAL
+      type: 0x00,
       hitratio: 0,
       pp: 30,
-      target: 16, // Self
+      target: 16,
     });
 
     const files: Uint8Array[] = [dummyFile, swordsData];
@@ -363,8 +354,8 @@ describe('Gen4RomHandler - Move data parsing', () => {
       names.push(`Move${i}`);
     }
 
-    const handler = new Gen4RomHandler();
-    handler.loadMoves(narc, names);
+    const handler = createTestHandler();
+    handler.loadMovesForTest(narc, names);
 
     const move = handler.moves[1];
     expect(move).not.toBeNull();
@@ -377,7 +368,7 @@ describe('Gen4RomHandler - Move data parsing', () => {
     const dummyFile = new Uint8Array(16);
     const moveData = buildMoveData({
       effectIndex: Gen4Constants.damageDefMinusOneEffect,
-      category: 0, // Physical
+      category: 0,
       power: 65,
       type: 0x00,
       hitratio: 100,
@@ -396,8 +387,8 @@ describe('Gen4RomHandler - Move data parsing', () => {
       names.push(`Move${i}`);
     }
 
-    const handler = new Gen4RomHandler();
-    handler.loadMoves(narc, names);
+    const handler = createTestHandler();
+    handler.loadMovesForTest(narc, names);
 
     const move = handler.moves[1];
     expect(move).not.toBeNull();
@@ -410,9 +401,9 @@ describe('Gen4RomHandler - Move data parsing', () => {
   it('should identify Special category moves correctly', () => {
     const dummyFile = new Uint8Array(16);
     const moveData = buildMoveData({
-      category: 1, // Special in Gen4 (0=Phys, 1=Spec, 2=Status)
+      category: 1,
       power: 90,
-      type: 0x0A, // FIRE
+      type: 0x0A,
     });
 
     const files: Uint8Array[] = [dummyFile, moveData];
@@ -426,8 +417,8 @@ describe('Gen4RomHandler - Move data parsing', () => {
       names.push(`Move${i}`);
     }
 
-    const handler = new Gen4RomHandler();
-    handler.loadMoves(narc, names);
+    const handler = createTestHandler();
+    handler.loadMovesForTest(narc, names);
 
     const move = handler.moves[1];
     expect(move!.category).toBe(MoveCategory.SPECIAL);
@@ -454,19 +445,16 @@ describe('Gen4RomHandler - Move data parsing', () => {
       names.push(`Move${i}`);
     }
 
-    const handler = new Gen4RomHandler();
-    handler.loadMoves(narc, names);
+    const handler = createTestHandler();
+    handler.loadMovesForTest(narc, names);
 
-    // Modify move
     handler.moves[1]!.power = 80;
     handler.moves[1]!.pp = 15;
 
-    // Save
-    handler.saveMoves();
+    handler.saveMovesForTest();
 
-    // Re-read from the narc
-    const handler2 = new Gen4RomHandler();
-    handler2.loadMoves(narc, names);
+    const handler2 = createTestHandler();
+    handler2.loadMovesForTest(narc, names);
 
     expect(handler2.moves[1]!.power).toBe(80);
     expect(handler2.moves[1]!.pp).toBe(15);
@@ -479,27 +467,137 @@ describe('Gen4RomHandler - Move data parsing', () => {
 
 describe('Gen4RomHandler - Accessors', () => {
   it('should return ROM name from entry', () => {
-    const handler = new Gen4RomHandler({
-      name: 'Diamond (U)',
-      romCode: 'ADAE',
-      version: 0,
-      romType: Gen4Constants.Type_DP,
-      arm9ExpectedCRC32: 0,
-      staticPokemonSupport: false,
-      copyStaticPokemon: false,
-      copyRoamingPokemon: false,
-      ignoreGameCornerStatics: false,
-      copyText: false,
-      strings: new Map(),
-      tweakFiles: new Map(),
-      numbers: new Map(),
-      arrayEntries: new Map(),
-      files: new Map(),
-      overlayExpectedCRC32s: new Map(),
-    });
+    const handler = createTestHandler();
+    handler.romEntry.name = 'Diamond (U)';
+    handler.romEntry.romCode = 'ADAE';
+    handler.romEntry.romType = Gen4Constants.Type_DP;
 
     expect(handler.getROMName()).toBe('Pokemon Diamond (U)');
     expect(handler.getROMCode()).toBe('ADAE');
     expect(handler.getROMType()).toBe(Gen4Constants.Type_DP);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: INI parser
+// ---------------------------------------------------------------------------
+
+describe('Gen4RomHandler - INI parser', () => {
+  it('should parse a basic ROM entry', () => {
+    const ini = `
+[Diamond (U)]
+Game=ADAE
+Type=DP
+Version=5
+File<Text>=<msgdata/msg.narc, CC7250FE>
+File<PokemonStats>=<poketool/personal/personal.narc, F963E181>
+PokemonNamesTextOffset=362
+Arm9CRC32=08E0337C
+OverlayCRC32<6>=0AE6A693
+StaticPokemonSupport=1
+`;
+    const entries = parseGen4RomEntries(ini);
+    expect(entries.length).toBe(1);
+    const e = entries[0];
+    expect(e.name).toBe('Diamond (U)');
+    expect(e.romCode).toBe('ADAE');
+    expect(e.version).toBe(5);
+    expect(e.romType).toBe(Gen4Constants.Type_DP);
+    expect(e.files.get('Text')?.path).toBe('msgdata/msg.narc');
+    expect(e.files.get('Text')?.expectedCRC32).toBe(0xCC7250FE);
+    expect(e.numbers.get('PokemonNamesTextOffset')).toBe(362);
+    expect(e.arm9ExpectedCRC32).toBe(0x08E0337C);
+    expect(e.overlayExpectedCRC32s.get(6)).toBe(0x0AE6A693);
+    expect(e.staticPokemonSupport).toBe(true);
+  });
+
+  it('should handle CopyFrom directive', () => {
+    const ini = `
+[Diamond (U)]
+Game=ADAE
+Type=DP
+Version=5
+PokemonNamesTextOffset=362
+File<Text>=<msgdata/msg.narc, CC7250FE>
+
+[Pearl (U)]
+Game=APAE
+Type=DP
+Version=5
+CopyText=1
+CopyStaticPokemon=1
+CopyFrom=Diamond (U)
+`;
+    const entries = parseGen4RomEntries(ini);
+    expect(entries.length).toBe(2);
+    const pearl = entries[1];
+    expect(pearl.romCode).toBe('APAE');
+    expect(pearl.numbers.get('PokemonNamesTextOffset')).toBe(362);
+    expect(pearl.files.get('Text')?.path).toBe('msgdata/msg.narc');
+  });
+
+  it('should parse StaticPokemon entries', () => {
+    const ini = `
+[Test]
+Game=TEST
+Type=DP
+Version=0
+StaticPokemon{}={Species=[342:0x261, 342:0x2BE], Level=[342:0x2C0]}
+`;
+    const entries = parseGen4RomEntries(ini);
+    expect(entries[0].staticPokemon.length).toBe(1);
+    const sp = entries[0].staticPokemon[0];
+    expect(sp.speciesEntries.length).toBe(2);
+    expect(sp.speciesEntries[0].file).toBe(342);
+    expect(sp.speciesEntries[0].offset).toBe(0x261);
+    expect(sp.levelEntries.length).toBe(1);
+    expect(sp.levelEntries[0].offset).toBe(0x2C0);
+  });
+
+  it('should parse array entries', () => {
+    const ini = `
+[Test]
+Game=TEST
+Type=DP
+Version=0
+DoublesTrainerClasses=[8, 23, 31, 47]
+EliteFourIndices=[261, 262, 263, 264, 267]
+`;
+    const entries = parseGen4RomEntries(ini);
+    expect(entries[0].arrayEntries.get('DoublesTrainerClasses')).toEqual([8, 23, 31, 47]);
+    expect(entries[0].arrayEntries.get('EliteFourIndices')).toEqual([261, 262, 263, 264, 267]);
+  });
+
+  it('should parse TMText entries', () => {
+    const ini = `
+[Test]
+Game=TEST
+Type=DP
+Version=0
+TMText{}={42=[538:1], 48=[54:2]}
+`;
+    const entries = parseGen4RomEntries(ini);
+    const tmTexts = entries[0].tmTexts;
+    expect(tmTexts.get(42)?.length).toBe(1);
+    expect(tmTexts.get(42)?.[0].textIndex).toBe(538);
+    expect(tmTexts.get(42)?.[0].stringNumber).toBe(1);
+    expect(tmTexts.get(48)?.length).toBe(1);
+  });
+
+  it('should parse the full gen4_offsets.ini without errors', () => {
+    // This loads the real INI file
+    const entries = parseGen4RomEntries(
+      require('fs').readFileSync(
+        require('path').resolve(__dirname, '../../../src/com/dabomstew/pkrandom/config/gen4_offsets.ini'),
+        'utf-8'
+      )
+    );
+    expect(entries.length).toBeGreaterThan(5);
+    // Diamond (U) should be first
+    expect(entries[0].name).toBe('Diamond (U)');
+    expect(entries[0].romCode).toBe('ADAE');
+    expect(entries[0].version).toBe(5);
+    expect(entries[0].files.get('Text')).toBeDefined();
+    expect(entries[0].staticPokemon.length).toBeGreaterThan(0);
   });
 });
