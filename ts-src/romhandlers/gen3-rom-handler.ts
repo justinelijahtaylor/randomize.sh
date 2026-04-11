@@ -2097,7 +2097,7 @@ export class Gen3RomHandler extends AbstractGBRomHandler {
   }
   hasTimeBasedEncounters(): boolean { return false; }
   hasWildAltFormes(): boolean { return false; }
-  randomizeWildHeldItems(_settings: Settings): void {}
+  // randomizeWildHeldItems inherited from AbstractRomHandler
   enableGuaranteedPokemonCatching(): void {
     const offset = find(this.rom, Gen3Constants.perfectOddsBranchLocator);
     if (offset > 0) {
@@ -2333,7 +2333,7 @@ export class Gen3RomHandler extends AbstractGBRomHandler {
     }
   }
 
-  getMoveSelectionPoolAtLevel(_tp: TrainerPokemon, _cyclicEvolutions: boolean): Move[] { return []; }
+  // getMoveSelectionPoolAtLevel inherited from AbstractRomHandler
 
   // -- Moves --
 
@@ -2509,7 +2509,7 @@ export class Gen3RomHandler extends AbstractGBRomHandler {
     }
   }
 
-  randomizeEggMoves(_settings: Settings): void {}
+  // randomizeEggMoves inherited from AbstractRomHandler
   supportsFourStartingMoves(): boolean { return true; }
 
   // -- Static Pokemon --
@@ -2885,7 +2885,7 @@ export class Gen3RomHandler extends AbstractGBRomHandler {
     }
   }
 
-  randomizeMoveTutorMoves(_settings: Settings): void {}
+  // randomizeMoveTutorMoves inherited from AbstractRomHandler
 
   getMoveTutorCompatibility(): Map<Pokemon, boolean[]> {
     if (!this.hasMoveTutors()) {
@@ -2923,7 +2923,7 @@ export class Gen3RomHandler extends AbstractGBRomHandler {
     }
   }
 
-  randomizeMoveTutorCompatibility(_settings: Settings): void {}
+  // randomizeMoveTutorCompatibility inherited from AbstractRomHandler
   fullMoveTutorCompatibility(): void {}
   ensureMoveTutorCompatSanity(): void {}
   ensureMoveTutorEvolutionSanity(): void {}

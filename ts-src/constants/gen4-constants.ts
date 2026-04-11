@@ -38,21 +38,21 @@ export const bsTMHMCompatOffset = 28;
 
 export const starterCriesPrefix = "0004000C10BD0000000000000000000000E000000000000000E0000000000200";
 
-// TODO: byte[] hgssStarterCodeSuffix = { 0x03, 0x03, 0x1A, 0x12, 0x1, 0x23, 0x0, 0x0 };
+export const hgssStarterCodeSuffix = new Uint8Array([0x03, 0x03, 0x1A, 0x12, 0x01, 0x23, 0x00, 0x00]);
 
 export const hgssFilesWithRivalScript: number[] = [ 7, 23, 96, 110, 819, 850, 866 ];
 
-// TODO: byte[] hgssRivalScriptMagic = { (byte) 0xCE, 0x00, 0x0C, (byte) 0x80, 0x11, 0x00, 0x0C, (byte) 0x80, (byte) 152, 0, 0x1C, 0x00, 0x05 };
+export const hgssRivalScriptMagic = new Uint8Array([0xCE, 0x00, 0x0C, 0x80, 0x11, 0x00, 0x0C, 0x80, 152, 0, 0x1C, 0x00, 0x05]);
 
 export const ptFilesWithRivalScript: number[] = [ 31, 36, 112, 123, 186, 427, 429, 1096 ];
 
 export const dpFilesWithRivalScript: number[] = [ 34, 90, 118, 180, 195, 394 ];
 
-// TODO: byte[] dpptRivalScriptMagic = { (byte) 0xDE, 0x00, 0x0C, (byte) 0x80, 0x11, 0x00, 0x0C, (byte) 0x80, (byte) 0x83, 0x01, 0x1C, 0x00, 0x01 };
+export const dpptRivalScriptMagic = new Uint8Array([0xDE, 0x00, 0x0C, 0x80, 0x11, 0x00, 0x0C, 0x80, 0x83, 0x01, 0x1C, 0x00, 0x01]);
 
-// TODO: byte[] dpptTagBattleScriptMagic1 = { (byte) 0xDE, 0x00, 0x0C, (byte) 0x80, 0x28, 0x00, 0x04, (byte) 0x80 };
+export const dpptTagBattleScriptMagic1 = new Uint8Array([0xDE, 0x00, 0x0C, 0x80, 0x28, 0x00, 0x04, 0x80]);
 
-// TODO: byte[] dpptTagBattleScriptMagic2 = { 0x11, 0x00, 0x0C, (byte) 0x80, (byte) 0x86, 0x01, 0x1C, 0x00, 0x01 };
+export const dpptTagBattleScriptMagic2 = new Uint8Array([0x11, 0x00, 0x0C, 0x80, 0x86, 0x01, 0x1C, 0x00, 0x01]);
 
 export const ptFilesWithTagScript: number[] = [ 2, 136, 201, 236 ];
 
@@ -268,150 +268,95 @@ export const scriptListTerminator = 0xFD13;
 
 export const itemScriptVariable = 0x8008;
 
-//     private static List<String> dpShopNames = Arrays.asList(
-//             "Sunyshore Secondary",
-// TODO: "Jubilife Secondary",
-// TODO: "Floaroma Secondary",
-// TODO: "Oreburgh Secondary",
-// TODO: "Eterna Secondary",
-// TODO: "Eterna Herbs",
-// TODO: "Snowpoint Secondary",
-// TODO: "Solaceon Secondary",
-// TODO: "Pastoria Secondary",
-// TODO: "Celestic Secondary",
-// TODO: "Hearthome Secondary",
-// TODO: "Canalave Secondary",
-// TODO: "Veilstone Department Store Secret Base Decorations 1",
-// TODO: "Veilstone Department Store Secret Base Decorations 2",
-// TODO: "Veilstone Department Store Vitamins",
-// TODO: "Veilstone Department Store TMs 1",
-// TODO: "Sunyshore Market Seals 1",
-// TODO: "Sunyshore Market Seals 2",
-// TODO: "Sunyshore Market Seals 3",
-// TODO: "Sunyshore Market Seals 4",
-// TODO: "Veilstone Department Store TMs 2",
-// TODO: "Sunyshore Market Seals 5",
-// TODO: "Sunyshore Market Seals 6",
-// TODO: "Sunyshore Market Seals 7",
-// TODO: "Pokemon League Secondary",
-// TODO: "Veilstone Department Store X Items",
-// TODO: "Veilstone Department Store Healing",
-// TODO: "Veilstone Department Store Balls Etc.",
-// TODO: "Progressive Shops"
-// TODO: );
+const dpShopNames: string[] = [
+    "Sunyshore Secondary", "Jubilife Secondary", "Floaroma Secondary",
+    "Oreburgh Secondary", "Eterna Secondary", "Eterna Herbs",
+    "Snowpoint Secondary", "Solaceon Secondary", "Pastoria Secondary",
+    "Celestic Secondary", "Hearthome Secondary", "Canalave Secondary",
+    "Veilstone Department Store Secret Base Decorations 1",
+    "Veilstone Department Store Secret Base Decorations 2",
+    "Veilstone Department Store Vitamins", "Veilstone Department Store TMs 1",
+    "Sunyshore Market Seals 1", "Sunyshore Market Seals 2",
+    "Sunyshore Market Seals 3", "Sunyshore Market Seals 4",
+    "Veilstone Department Store TMs 2", "Sunyshore Market Seals 5",
+    "Sunyshore Market Seals 6", "Sunyshore Market Seals 7",
+    "Pokemon League Secondary", "Veilstone Department Store X Items",
+    "Veilstone Department Store Healing", "Veilstone Department Store Balls Etc.",
+    "Progressive Shops",
+];
 
-//     private static List<String> ptShopNames = Arrays.asList(
-//             "Jubilife Secondary",
-// TODO: "Sunyshore Secondary",
-// TODO: "Floaroma Secondary",
-// TODO: "Oreburgh Secondary",
-// TODO: "Eterna Herbs",
-// TODO: "Canalave Secondary",
-// TODO: "Pastoria Secondary",
-// TODO: "Celestic Secondary",
-// TODO: "Snowpoint Secondary",
-// TODO: "Solaceon Secondary",
-// TODO: "Eterna Secondary",
-// TODO: "Hearthome Secondary",
-// TODO: "Veilstone Department Store B1 Berries",
-// TODO: "Veilstone Department Store Secret Base Decorations 1",
-// TODO: "Veilstone Department Store Vitamins",
-// TODO: "Veilstone Department Store Secret Base Decorations 2",
-// TODO: "Veilstone Department Store TMs 1",
-// TODO: "Sunyshore Market Seals 1",
-// TODO: "Sunyshore Market Seals 2",
-// TODO: "Sunyshore Market Seals 3",
-// TODO: "Sunyshore Market Seals 4",
-// TODO: "Veilstone Department Store TMs 2",
-// TODO: "Sunyshore Market Seals 5",
-// TODO: "Sunyshore Market Seals 6",
-// TODO: "Sunyshore Market Seals 7",
-// TODO: "Pokemon League Secondary",
-// TODO: "Veilstone Department Store X Items",
-// TODO: "Veilstone Department Store Healing",
-// TODO: "Veilstone Department Store Balls Etc.",
-// TODO: "Progressive Shops"
-// TODO: );
+const ptShopNames: string[] = [
+    "Jubilife Secondary", "Sunyshore Secondary", "Floaroma Secondary",
+    "Oreburgh Secondary", "Eterna Herbs", "Canalave Secondary",
+    "Pastoria Secondary", "Celestic Secondary", "Snowpoint Secondary",
+    "Solaceon Secondary", "Eterna Secondary", "Hearthome Secondary",
+    "Veilstone Department Store B1 Berries",
+    "Veilstone Department Store Secret Base Decorations 1",
+    "Veilstone Department Store Vitamins",
+    "Veilstone Department Store Secret Base Decorations 2",
+    "Veilstone Department Store TMs 1", "Sunyshore Market Seals 1",
+    "Sunyshore Market Seals 2", "Sunyshore Market Seals 3",
+    "Sunyshore Market Seals 4", "Veilstone Department Store TMs 2",
+    "Sunyshore Market Seals 5", "Sunyshore Market Seals 6",
+    "Sunyshore Market Seals 7", "Pokemon League Secondary",
+    "Veilstone Department Store X Items", "Veilstone Department Store Healing",
+    "Veilstone Department Store Balls Etc.", "Progressive Shops",
+];
 
-//     private static List<String> hgssShopNames = Arrays.asList(
-//             "Cherrygrove Secondary",
-// TODO: "Cerulean Secondary",
-// TODO: "Ecruteak Secondary",
-// TODO: "Celadon Department Store Mail",
-// TODO: "Saffron Secondary",
-// TODO: "Violet Secondary",
-// TODO: "Blackthorn Secondary",
-// TODO: "Olivine Secondary",
-// TODO: "Fuchsia Secondary",
-// TODO: "Lavender Secondary",
-// TODO: "Pewter Secondary",
-// TODO: "Viridian Secondary",
-// TODO: "Azalea Secondary",
-// TODO: "Mahogany Before Hideout",
-// TODO: "Safari Zone Gate Southwest",
-// TODO: "Goldenrod Herb Shop",
-// TODO: "Cianwood Pharmacy",
-// TODO: "Veilstone Department Store Secret Base Decorations 1",
-// TODO: "Veilstone Department Store Secret Base Decorations 2",
-// TODO: "Goldenrod Department Store Vitamins",
-// TODO: "Celadon Department Store Vitamins",
-// TODO: "Mt. Moon Square",
-// TODO: "Sunyshore Market Seals 1",
-// TODO: "Sunyshore Market Seals 2",
-// TODO: "Sunyshore Market Seals 3",
-// TODO: "Sunyshore Market Seals 4",
-// TODO: "Sunyshore Market Seals 5",
-// TODO: "Sunyshore Market Seals 6",
-// TODO: "Unused Secondary",
-// TODO: "Sunyshore Market Seals 7",
-// TODO: "Pokeathlon Dome Data Card Shop 25-27",
-// TODO: "Goldenrod Department Store X Items",
-// TODO: "Celadon Department Store X Items",
-// TODO: "Mahogany After Hideout",
-// TODO: "Goldenrod Department Store Healing",
-// TODO: "Celadon Department Store Healing",
-// TODO: "Goldenrod Department Store Balls Etc.",
-// TODO: "Goldenrod TMs",
-// TODO: "Celadon Department Store Balls Etc.",
-// TODO: "Celadon TMs",
-// TODO: "Pokeathlon Dome Athlete Shop Sunday (Pre-National Dex)",
-// TODO: "Pokeathlon Dome Data Card Shop 19-24",
-// TODO: "Pokeathlon Dome Data Card Shop 1-6",
-// TODO: "Pokeathlon Dome Athlete Shop Monday (Pre-National Dex)",
-// TODO: "Pokeathlon Dome Athlete Shop Tuesday (Pre-National Dex)",
-// TODO: "Pokeathlon Dome Data Card Shop 7-12",
-// TODO: "Pokeathlon Dome Athlete Shop Wednesday (Pre-National Dex)",
-// TODO: "Pokeathlon Dome Athlete Shop Thursday (Pre-National Dex)",
-// TODO: "Pokeathlon Dome Athlete Shop Friday (Pre-National Dex)",
-// TODO: "Pokeathlon Dome Athlete Shop Saturday (Pre-National Dex)",
-// TODO: "Pokeathlon Dome Data Card Shop 13-18",
-// TODO: "Pokeathlon Dome Athlete Shop Sunday (Post-National Dex)",
-// TODO: "Pokeathlon Dome Athlete Shop Monday (Post-National Dex)",
-// TODO: "Pokeathlon Dome Athlete Shop Tuesday (Post-National Dex)",
-// TODO: "Pokeathlon Dome Athlete Shop Wednesday (Post-National Dex)",
-// TODO: "Pokeathlon Dome Athlete Shop Thursday (Post-National Dex)",
-// TODO: "Pokeathlon Dome Athlete Shop Friday (Post-National Dex)",
-// TODO: "Pokeathlon Dome Athlete Shop Saturday (Post-National Dex)",
-// TODO: "Progressive Shops"
-// TODO: );
+const hgssShopNames: string[] = [
+    "Cherrygrove Secondary", "Cerulean Secondary", "Ecruteak Secondary",
+    "Celadon Department Store Mail", "Saffron Secondary", "Violet Secondary",
+    "Blackthorn Secondary", "Olivine Secondary", "Fuchsia Secondary",
+    "Lavender Secondary", "Pewter Secondary", "Viridian Secondary",
+    "Azalea Secondary", "Mahogany Before Hideout", "Safari Zone Gate Southwest",
+    "Goldenrod Herb Shop", "Cianwood Pharmacy",
+    "Veilstone Department Store Secret Base Decorations 1",
+    "Veilstone Department Store Secret Base Decorations 2",
+    "Goldenrod Department Store Vitamins", "Celadon Department Store Vitamins",
+    "Mt. Moon Square", "Sunyshore Market Seals 1", "Sunyshore Market Seals 2",
+    "Sunyshore Market Seals 3", "Sunyshore Market Seals 4",
+    "Sunyshore Market Seals 5", "Sunyshore Market Seals 6",
+    "Unused Secondary", "Sunyshore Market Seals 7",
+    "Pokeathlon Dome Data Card Shop 25-27", "Goldenrod Department Store X Items",
+    "Celadon Department Store X Items", "Mahogany After Hideout",
+    "Goldenrod Department Store Healing", "Celadon Department Store Healing",
+    "Goldenrod Department Store Balls Etc.", "Goldenrod TMs",
+    "Celadon Department Store Balls Etc.", "Celadon TMs",
+    "Pokeathlon Dome Athlete Shop Sunday (Pre-National Dex)",
+    "Pokeathlon Dome Data Card Shop 19-24", "Pokeathlon Dome Data Card Shop 1-6",
+    "Pokeathlon Dome Athlete Shop Monday (Pre-National Dex)",
+    "Pokeathlon Dome Athlete Shop Tuesday (Pre-National Dex)",
+    "Pokeathlon Dome Data Card Shop 7-12",
+    "Pokeathlon Dome Athlete Shop Wednesday (Pre-National Dex)",
+    "Pokeathlon Dome Athlete Shop Thursday (Pre-National Dex)",
+    "Pokeathlon Dome Athlete Shop Friday (Pre-National Dex)",
+    "Pokeathlon Dome Athlete Shop Saturday (Pre-National Dex)",
+    "Pokeathlon Dome Data Card Shop 13-18",
+    "Pokeathlon Dome Athlete Shop Sunday (Post-National Dex)",
+    "Pokeathlon Dome Athlete Shop Monday (Post-National Dex)",
+    "Pokeathlon Dome Athlete Shop Tuesday (Post-National Dex)",
+    "Pokeathlon Dome Athlete Shop Wednesday (Post-National Dex)",
+    "Pokeathlon Dome Athlete Shop Thursday (Post-National Dex)",
+    "Pokeathlon Dome Athlete Shop Friday (Post-National Dex)",
+    "Pokeathlon Dome Athlete Shop Saturday (Post-National Dex)",
+    "Progressive Shops",
+];
 
-export function getShopNames(romType: number): string[] | null {
-    // TODO: dpShopNames, ptShopNames, hgssShopNames are not yet defined
-    // if (romType == Type_DP) {
-    //     return dpShopNames;
-    // } else if (romType == Type_Plat) {
-    //     return ptShopNames;
-    // } else if (romType == Type_HGSS) {
-    //     return hgssShopNames;
-    // }
-    return null;
+export function getShopNames(romType: number): string[] {
+    if (romType == Type_DP) {
+        return dpShopNames;
+    } else if (romType == Type_Plat) {
+        return ptShopNames;
+    } else {
+        return hgssShopNames;
+    }
 }
 
 export const evolutionItems: number[] = [Items.sunStone, Items.moonStone, Items.fireStone, Items.thunderStone, Items.waterStone, Items.leafStone, Items.shinyStone, Items.duskStone, Items.dawnStone, Items.ovalStone, Items.kingsRock, Items.deepSeaTooth, Items.deepSeaScale, Items.metalCoat, Items.dragonScale, Items.upgrade, Items.protector, Items.electirizer, Items.magmarizer, Items.dubiousDisc, Items.reaperCloth, Items.razorClaw, Items.razorFang];
 
-// TODO: const formeSuffixes = setupFormeSuffixes();
-// TODO: const formeMappings = setupFormeMappings();
-// TODO: const cosmeticForms = setupCosmeticForms();
+export const formeSuffixes: Map<number, string> = setupFormeSuffixes();
+export const formeMappings: Map<number, FormeInfo> = setupFormeMappings();
+export const cosmeticForms: Map<number, number> = setupCosmeticForms();
 
 // TODO: const formeSuffixesByBaseForme = setupFormeSuffixesByBaseForme();
 // TODO: const dummyFormeSuffixes = setupDummyFormeSuffixes();
@@ -452,107 +397,61 @@ export const hgssBannedOverworldPokemon: number[] = [
     856, 857, 858, 859, 860, 861, 862                   // MMODEL_FOLLOWER_MON_ARCEUS_WATER through _DARK
 ];
 
-// TODO: export function convertOverworldSpriteToSpecies(overworldSpriteID: number): number { let speciesID = overworldSpriteID - 296;
+export function convertOverworldSpriteToSpecies(overworldSpriteID: number): number {
+    let speciesID = overworldSpriteID - 296;
 
-// Venusaur
-// TODO: if (overworldSpriteID >= 300) {
-// TODO: speciesID -= 1;
+    // Venusaur
+    if (overworldSpriteID >= 300) { speciesID -= 1; }
+    // Pikachu
+    if (overworldSpriteID >= 323) { speciesID -= 1; }
+    // Meganium
+    if (overworldSpriteID >= 453) { speciesID -= 1; }
+    // Pichu
+    if (overworldSpriteID >= 472) { speciesID -= 1; }
+    // Unown
+    if (overworldSpriteID >= 528) { speciesID -= 27; }
+    else if (overworldSpriteID > 501) { speciesID -= (overworldSpriteID - 501); }
+    // Wobbuffet
+    if (overworldSpriteID >= 530) { speciesID -= 1; }
+    // Steelix
+    if (overworldSpriteID >= 537) { speciesID -= 1; }
+    // Heracross
+    if (overworldSpriteID >= 544) { speciesID -= 1; }
+    // Deoxys
+    if (overworldSpriteID >= 719) { speciesID -= 3; }
+    else if (overworldSpriteID > 716) { speciesID -= (overworldSpriteID - 716); }
+    // Burmy
+    if (overworldSpriteID >= 747) { speciesID -= 2; }
+    else if (overworldSpriteID > 745) { speciesID -= (overworldSpriteID - 745); }
+    // Wormadam
+    if (overworldSpriteID >= 750) { speciesID -= 2; }
+    else if (overworldSpriteID > 748) { speciesID -= (overworldSpriteID - 748); }
+    // Combee
+    if (overworldSpriteID >= 753) { speciesID -= 1; }
+    // Shellos
+    if (overworldSpriteID >= 761) { speciesID -= 1; }
+    // Gastrodon
+    if (overworldSpriteID >= 763) { speciesID -= 1; }
+    // Gible
+    if (overworldSpriteID >= 784) { speciesID -= 1; }
+    // Gabite
+    if (overworldSpriteID >= 786) { speciesID -= 1; }
+    // Garchomp
+    if (overworldSpriteID >= 788) { speciesID -= 1; }
+    // Hippopotas
+    if (overworldSpriteID >= 793) { speciesID -= 1; }
+    // Hippowdon
+    if (overworldSpriteID >= 795) { speciesID -= 1; }
+    // Rotom
+    if (overworldSpriteID >= 829) { speciesID -= 5; }
+    else if (overworldSpriteID > 824) { speciesID -= (overworldSpriteID - 824); }
+    // Giratina
+    if (overworldSpriteID >= 838) { speciesID -= 1; }
+    // Arceus
+    if (overworldSpriteID > 845) { speciesID -= (overworldSpriteID - 845); }
 
-// Pikachu
-// TODO: if (overworldSpriteID >= 323) {
-// TODO: speciesID -= 1;
-
-// Meganium
-// TODO: if (overworldSpriteID >= 453) {
-// TODO: speciesID -= 1;
-
-// Pichu
-// TODO: if (overworldSpriteID >= 472) {
-// TODO: speciesID -= 1;
-
-// Unown
-// TODO: if (overworldSpriteID >= 528) {
-// TODO: speciesID -= 27;
-// TODO: } else if (overworldSpriteID > 501) {
-// TODO: speciesID -= (overworldSpriteID - 501);
-
-// Wobbuffet
-// TODO: if (overworldSpriteID >= 530) {
-// TODO: speciesID -= 1;
-
-// Steelix
-// TODO: if (overworldSpriteID >= 537) {
-// TODO: speciesID -= 1;
-
-// Heracross
-// TODO: if (overworldSpriteID >= 544) {
-// TODO: speciesID -= 1;
-
-// Deoxys
-// TODO: if (overworldSpriteID >= 719) {
-// TODO: speciesID -= 3;
-// TODO: } else if (overworldSpriteID > 716) {
-// TODO: speciesID -= (overworldSpriteID - 716);
-
-// Burmy
-// TODO: if (overworldSpriteID >= 747) {
-// TODO: speciesID -= 2;
-// TODO: } else if (overworldSpriteID > 745) {
-// TODO: speciesID -= (overworldSpriteID - 745);
-
-// Wormadam
-// TODO: if (overworldSpriteID >= 750) {
-// TODO: speciesID -= 2;
-// TODO: } else if (overworldSpriteID > 748) {
-// TODO: speciesID -= (overworldSpriteID - 748);
-
-// Combee
-// TODO: if (overworldSpriteID >= 753) {
-// TODO: speciesID -= 1;
-
-// Shellos
-// TODO: if (overworldSpriteID >= 761) {
-// TODO: speciesID -= 1;
-
-// Gastrodon
-// TODO: if (overworldSpriteID >= 763) {
-// TODO: speciesID -= 1;
-
-// Gible
-// TODO: if (overworldSpriteID >= 784) {
-// TODO: speciesID -= 1;
-
-// Gabite
-// TODO: if (overworldSpriteID >= 786) {
-// TODO: speciesID -= 1;
-
-// Garchomp
-// TODO: if (overworldSpriteID >= 788) {
-// TODO: speciesID -= 1;
-
-// Hippopotas
-// TODO: if (overworldSpriteID >= 793) {
-// TODO: speciesID -= 1;
-
-// Hippowdon
-// TODO: if (overworldSpriteID >= 795) {
-// TODO: speciesID -= 1;
-
-// Rotom
-// TODO: if (overworldSpriteID >= 829) {
-// TODO: speciesID -= 5;
-// TODO: } else if (overworldSpriteID > 824) {
-// TODO: speciesID -= (overworldSpriteID - 824);
-
-// Giratina
-// TODO: if (overworldSpriteID >= 838) {
-// TODO: speciesID -= 1;
-
-// Arceus
-// TODO: if (overworldSpriteID > 845) {
-// TODO: speciesID -= (overworldSpriteID - 845);
-
-// TODO: return speciesID;
+    return speciesID;
+}
 
 // The original slot each of the 20 "alternate" slots is mapped to
 // swarmx2, dayx2, nightx2, pokeradarx4, GBAx10
@@ -900,7 +799,137 @@ export function getTextCharsPerLine(romType: number): number {
     }
 }
 
-// TODO: const balancedItemPrices = Stream.of(new Integer[][] { // Skip item index 0. All prices divided by 10 {Items.masterBall, 300}, {Items.ultraBall, 120}, {Items.greatBall, 60}, {Items.pokeBall, 20}, {Items.safariBall, 50}, {Items.netBall, 100}, {Items.diveBall, 100}, {Items.nestBall, 100}, {Items.repeatBall, 100}, {Items.timerBall, 100}, {Items.luxuryBall, 100}, {Items.premierBall, 20}, {Items.duskBall, 100}, {Items.healBall, 30}, {Items.quickBall, 100}, {Items.cherishBall, 20}, {Items.potion, 30}, {Items.antidote, 10}, {Items.burnHeal, 25}, {Items.iceHeal, 25}, {Items.awakening, 25}, {Items.paralyzeHeal, 20}, {Items.fullRestore, 300}, {Items.maxPotion, 250}, {Items.hyperPotion, 120}, {Items.superPotion, 70}, {Items.fullHeal, 60}, {Items.revive, 150}, {Items.maxRevive, 400}, {Items.freshWater, 40}, {Items.sodaPop, 60}, {Items.lemonade, 70}, {Items.moomooMilk, 80}, {Items.energyPowder, 40}, {Items.energyRoot, 110}, {Items.healPowder, 45}, {Items.revivalHerb, 280}, {Items.ether, 300}, {Items.maxEther, 450}, {Items.elixir, 1500}, {Items.maxElixir, 1800}, {Items.lavaCookie, 45}, {Items.berryJuice, 10}, {Items.sacredAsh, 1000}, {Items.hpUp, 980}, {Items.protein, 980}, {Items.iron, 980}, {Items.carbos, 980}, {Items.calcium, 980}, {Items.rareCandy, 1000}, {Items.ppUp, 980}, {Items.zinc, 980}, {Items.ppMax, 2490}, {Items.oldGateau, 45}, {Items.guardSpec, 70}, {Items.direHit, 65}, {Items.xAttack, 50}, {Items.xDefense, 55}, {Items.xSpeed, 35}, {Items.xAccuracy, 95}, {Items.xSpAtk, 35}, {Items.xSpDef, 35}, {Items.pokeDoll, 100}, {Items.fluffyTail, 100}, {Items.blueFlute, 2}, {Items.yellowFlute, 2}, {Items.redFlute, 2}, {Items.blackFlute, 2}, {Items.whiteFlute, 2}, {Items.shoalSalt, 2}, {Items.shoalShell, 2}, {Items.redShard, 40}, {Items.blueShard, 40}, {Items.yellowShard, 40}, {Items.greenShard, 40}, {Items.superRepel, 50}, {Items.maxRepel, 70}, {Items.escapeRope, 55}, {Items.repel, 35}, {Items.sunStone, 300}, {Items.moonStone, 300}, {Items.fireStone, 300}, {Items.thunderStone, 300}, {Items.waterStone, 300}, {Items.leafStone, 300}, {Items.tinyMushroom, 50}, {Items.bigMushroom, 500}, {Items.pearl, 140}, {Items.bigPearl, 750}, {Items.stardust, 200}, {Items.starPiece, 980}, {Items.nugget, 1000}, {Items.heartScale, 500}, {Items.honey, 50}, {Items.growthMulch, 20}, {Items.dampMulch, 20}, {Items.stableMulch, 20}, {Items.gooeyMulch, 20}, {Items.rootFossil, 500}, {Items.clawFossil, 500}, {Items.helixFossil, 500}, {Items.domeFossil, 500}, {Items.oldAmber, 800}, {Items.armorFossil, 500}, {Items.skullFossil, 500}, {Items.rareBone, 1000}, {Items.shinyStone, 300}, {Items.duskStone, 300}, {Items.dawnStone, 300}, {Items.ovalStone, 300}, {Items.oddKeystone, 210}, {Items.griseousOrb, 1000}, {Items.tea, 0}, // unused in Gen 4 {Items.unused114, 0}, {Items.autograph, 0}, // unused in Gen 4 {Items.douseDrive, 0}, // unused in Gen 4 {Items.shockDrive, 0}, // unused in Gen 4 {Items.burnDrive, 0}, // unused in Gen 4 {Items.chillDrive, 0}, // unused in Gen 4 {Items.unused120, 0}, // unused in Gen 4 {Items.pokemonBox, 0}, // unused in Gen 4 {Items.medicinePocket, 0}, // unused in Gen 4 {Items.tmCase, 0}, // unused in Gen 4 {Items.candyJar, 0}, // unused in Gen 4 {Items.powerUpPocket, 0}, // unused in Gen 4 {Items.clothingTrunk, 0}, // unused in Gen 4 {Items.catchingPocket, 0}, // unused in Gen 4 {Items.battlePocket, 0}, // unused in Gen 4 {Items.unused129, 0}, {Items.unused130, 0}, {Items.unused131, 0}, {Items.unused132, 0}, {Items.unused133, 0}, {Items.sweetHeart, 0}, // unused in Gen 4 {Items.adamantOrb, 1000}, {Items.lustrousOrb, 1000}, {Items.mail1, 5}, {Items.mail2, 5}, {Items.mail3, 5}, {Items.mail4, 5}, {Items.mail5, 5}, {Items.mail6, 5}, {Items.mail7, 5}, {Items.mail8, 5}, {Items.mail9, 5}, {Items.mail10, 5}, {Items.mail11, 5}, {Items.mail12, 5}, {Items.cheriBerry, 20}, {Items.chestoBerry, 25}, {Items.pechaBerry, 10}, {Items.rawstBerry, 25}, {Items.aspearBerry, 25}, {Items.leppaBerry, 300}, {Items.oranBerry, 5}, {Items.persimBerry, 20}, {Items.lumBerry, 50}, {Items.sitrusBerry, 50}, {Items.figyBerry, 10}, {Items.wikiBerry, 10}, {Items.magoBerry, 10}, {Items.aguavBerry, 10}, {Items.iapapaBerry, 10}, {Items.razzBerry, 50}, {Items.blukBerry, 50}, {Items.nanabBerry, 50}, {Items.wepearBerry, 50}, {Items.pinapBerry, 50}, {Items.pomegBerry, 50}, {Items.kelpsyBerry, 50}, {Items.qualotBerry, 50}, {Items.hondewBerry, 50}, {Items.grepaBerry, 50}, {Items.tamatoBerry, 50}, {Items.cornnBerry, 50}, {Items.magostBerry, 50}, {Items.rabutaBerry, 50}, {Items.nomelBerry, 50}, {Items.spelonBerry, 50}, {Items.pamtreBerry, 50}, {Items.watmelBerry, 50}, {Items.durinBerry, 50}, {Items.belueBerry, 50}, {Items.occaBerry, 100}, {Items.passhoBerry, 100}, {Items.wacanBerry, 100}, {Items.rindoBerry, 100}, {Items.yacheBerry, 100}, {Items.chopleBerry, 100}, {Items.kebiaBerry, 100}, {Items.shucaBerry, 100}, {Items.cobaBerry, 100}, {Items.payapaBerry, 100}, {Items.tangaBerry, 100}, {Items.chartiBerry, 100}, {Items.kasibBerry, 100}, {Items.habanBerry, 100}, {Items.colburBerry, 100}, {Items.babiriBerry, 100}, {Items.chilanBerry, 100}, {Items.liechiBerry, 100}, {Items.ganlonBerry, 100}, {Items.salacBerry, 100}, {Items.petayaBerry, 100}, {Items.apicotBerry, 100}, {Items.lansatBerry, 100}, {Items.starfBerry, 100}, {Items.enigmaBerry, 100}, {Items.micleBerry, 100}, {Items.custapBerry, 100}, {Items.jabocaBerry, 100}, {Items.rowapBerry, 100}, {Items.brightPowder, 300}, {Items.whiteHerb, 100}, {Items.machoBrace, 300}, {Items.expShare, 600}, {Items.quickClaw, 450}, {Items.sootheBell, 100}, {Items.mentalHerb, 100}, {Items.choiceBand, 1000}, {Items.kingsRock, 500}, {Items.silverPowder, 200}, {Items.amuletCoin, 1500}, {Items.cleanseTag, 100}, {Items.soulDew, 20}, {Items.deepSeaTooth, 300}, {Items.deepSeaScale, 300}, {Items.smokeBall, 20}, {Items.everstone, 20}, {Items.focusBand, 300}, {Items.luckyEgg, 1000}, {Items.scopeLens, 500}, {Items.metalCoat, 300}, {Items.leftovers, 1000}, {Items.dragonScale, 300}, {Items.lightBall, 10}, {Items.softSand, 200}, {Items.hardStone, 200}, {Items.miracleSeed, 200}, {Items.blackGlasses, 200}, {Items.blackBelt, 200}, {Items.magnet, 200}, {Items.mysticWater, 200}, {Items.sharpBeak, 200}, {Items.poisonBarb, 200}, {Items.neverMeltIce, 200}, {Items.spellTag, 200}, {Items.twistedSpoon, 200}, {Items.charcoal, 200}, {Items.dragonFang, 200}, {Items.silkScarf, 200}, {Items.upgrade, 300}, {Items.shellBell, 600}, {Items.seaIncense, 200}, {Items.laxIncense, 300}, {Items.luckyPunch, 1}, {Items.metalPowder, 1}, {Items.thickClub, 50}, {Items.leek, 20}, {Items.redScarf, 10}, {Items.blueScarf, 10}, {Items.pinkScarf, 10}, {Items.greenScarf, 10}, {Items.yellowScarf, 10}, {Items.wideLens, 150}, {Items.muscleBand, 200}, {Items.wiseGlasses, 200}, {Items.expertBelt, 600}, {Items.lightClay, 150}, {Items.lifeOrb, 1000}, {Items.powerHerb, 100}, {Items.toxicOrb, 150}, {Items.flameOrb, 150}, {Items.quickPowder, 1}, {Items.focusSash, 200}, {Items.zoomLens, 150}, {Items.metronome, 300}, {Items.ironBall, 100}, {Items.laggingTail, 100}, {Items.destinyKnot, 150}, {Items.blackSludge, 500}, {Items.icyRock, 20}, {Items.smoothRock, 20}, {Items.heatRock, 20}, {Items.dampRock, 20}, {Items.gripClaw, 150}, {Items.choiceScarf, 1000}, {Items.stickyBarb, 150}, {Items.powerBracer, 300}, {Items.powerBelt, 300}, {Items.powerLens, 300}, {Items.powerBand, 300}, {Items.powerAnklet, 300}, {Items.powerWeight, 300}, {Items.shedShell, 50}, {Items.bigRoot, 150}, {Items.choiceSpecs, 1000}, {Items.flamePlate, 200}, {Items.splashPlate, 200}, {Items.zapPlate, 200}, {Items.meadowPlate, 200}, {Items.iciclePlate, 200}, {Items.fistPlate, 200}, {Items.toxicPlate, 200}, {Items.earthPlate, 200}, {Items.skyPlate, 200}, {Items.mindPlate, 200}, {Items.insectPlate, 200}, {Items.stonePlate, 200}, {Items.spookyPlate, 200}, {Items.dracoPlate, 200}, {Items.dreadPlate, 200}, {Items.ironPlate, 200}, {Items.oddIncense, 200}, {Items.rockIncense, 200}, {Items.fullIncense, 100}, {Items.waveIncense, 200}, {Items.roseIncense, 200}, {Items.luckIncense, 1500}, {Items.pureIncense, 100}, {Items.protector, 300}, {Items.electirizer, 300}, {Items.magmarizer, 300}, {Items.dubiousDisc, 300}, {Items.reaperCloth, 300}, {Items.razorClaw, 500}, {Items.razorFang, 500}, {Items.tm01, 300}, {Items.tm02, 300}, {Items.tm03, 300}, {Items.tm04, 150}, {Items.tm05, 100}, {Items.tm06, 300}, {Items.tm07, 200}, {Items.tm08, 150}, {Items.tm09, 200}, {Items.tm10, 200}, {Items.tm11, 200}, {Items.tm12, 150}, {Items.tm13, 300}, {Items.tm14, 550}, {Items.tm15, 750}, {Items.tm16, 200}, {Items.tm17, 200}, {Items.tm18, 200}, {Items.tm19, 300}, {Items.tm20, 200}, {Items.tm21, 100}, {Items.tm22, 300}, {Items.tm23, 300}, {Items.tm24, 300}, {Items.tm25, 550}, {Items.tm26, 300}, {Items.tm27, 100}, {Items.tm28, 200}, {Items.tm29, 300}, {Items.tm30, 300}, {Items.tm31, 300}, {Items.tm32, 100}, {Items.tm33, 200}, {Items.tm34, 300}, {Items.tm35, 300}, {Items.tm36, 300}, {Items.tm37, 200}, {Items.tm38, 550}, {Items.tm39, 200}, {Items.tm40, 300}, {Items.tm41, 150}, {Items.tm42, 300}, {Items.tm43, 200}, {Items.tm44, 300}, {Items.tm45, 300}, {Items.tm46, 200}, {Items.tm47, 300}, {Items.tm48, 300}, {Items.tm49, 150}, {Items.tm50, 550}, {Items.tm51, 200}, {Items.tm52, 550}, {Items.tm53, 300}, {Items.tm54, 200}, {Items.tm55, 300}, {Items.tm56, 200}, {Items.tm57, 300}, {Items.tm58, 200}, {Items.tm59, 300}, {Items.tm60, 300}, {Items.tm61, 200}, {Items.tm62, 300}, {Items.tm63, 200}, {Items.tm64, 750}, {Items.tm65, 300}, {Items.tm66, 300}, {Items.tm67, 100}, {Items.tm68, 750}, {Items.tm69, 150}, {Items.tm70, 100}, {Items.tm71, 300}, {Items.tm72, 300}, {Items.tm73, 200}, {Items.tm74, 300}, {Items.tm75, 150}, {Items.tm76, 200}, {Items.tm77, 150}, {Items.tm78, 150}, {Items.tm79, 300}, {Items.tm80, 300}, {Items.tm81, 300}, {Items.tm82, 100}, {Items.tm83, 200}, {Items.tm84, 300}, {Items.tm85, 300}, {Items.tm86, 300}, {Items.tm87, 150}, {Items.tm88, 300}, {Items.tm89, 300}, {Items.tm90, 200}, {Items.tm91, 300}, {Items.tm92, 550}, {Items.hm01, 0}, {Items.hm02, 0}, {Items.hm03, 0}, {Items.hm04, 0}, {Items.hm05, 0}, {Items.hm06, 0}, {Items.hm07, 0}, {Items.hm08, 0}, {Items.explorerKit, 0}, {Items.lootSack, 0}, {Items.ruleBook, 0}, {Items.pokeRadar, 0}, {Items.pointCard, 0}, {Items.journal, 0}, {Items.sealCase, 0}, {Items.fashionCase, 0}, {Items.sealBag, 0}, {Items.palPad, 0}, {Items.worksKey, 0}, {Items.oldCharm, 0}, {Items.galacticKey, 0}, {Items.redChain, 0}, {Items.townMap, 0}, {Items.vsSeeker, 0}, {Items.coinCase, 0}, {Items.oldRod, 0}, {Items.goodRod, 0}, {Items.superRod, 0}, {Items.sprayduck, 0}, {Items.poffinCase, 0}, {Items.bike, 0}, {Items.suiteKey, 0}, {Items.oaksLetter, 0}, {Items.lunarWing, 0}, {Items.memberCard, 0}, {Items.azureFlute, 0}, {Items.ssTicketJohto, 0}, {Items.contestPass, 0}, {Items.magmaStone, 0}, {Items.parcelSinnoh, 0}, {Items.coupon1, 0}, {Items.coupon2, 0}, {Items.coupon3, 0}, {Items.storageKeySinnoh, 0}, {Items.secretPotion, 0}, {Items.vsRecorder, 0}, {Items.gracidea, 0}, {Items.secretKeySinnoh, 0}, {Items.apricornBox, 0}, {Items.unownReport, 0}, {Items.berryPots, 0}, {Items.dowsingMachine, 0}, {Items.blueCard, 0}, {Items.slowpokeTail, 0}, {Items.clearBell, 0}, {Items.cardKeyJohto, 0}, {Items.basementKeyJohto, 0}, {Items.squirtBottle, 0}, {Items.redScale, 0}, {Items.lostItem, 0}, {Items.pass, 0}, {Items.machinePart, 0}, {Items.silverWing, 0}, {Items.rainbowWing, 0}, {Items.mysteryEgg, 0}, {Items.redApricorn, 2}, {Items.blueApricorn, 2}, {Items.yellowApricorn, 2}, {Items.greenApricorn, 2}, {Items.pinkApricorn, 2}, {Items.whiteApricorn, 2}, {Items.blackApricorn, 2}, {Items.fastBall, 30}, {Items.levelBall, 30}, {Items.lureBall, 30}, {Items.heavyBall, 30}, {Items.loveBall, 30}, {Items.friendBall, 30}, {Items.moonBall, 30}, {Items.sportBall, 30}, {Items.parkBall, 0}, {Items.photoAlbum, 0}, {Items.gbSounds, 0}, {Items.tidalBell, 0}, {Items.rageCandyBar, 0}, {Items.dataCard01, 0}, {Items.dataCard02, 0}, {Items.dataCard03, 0}, {Items.dataCard04, 0}, {Items.dataCard05, 0}, {Items.dataCard06, 0}, {Items.dataCard07, 0}, {Items.dataCard08, 0}, {Items.dataCard09, 0}, {Items.dataCard10, 0}, {Items.dataCard11, 0}, {Items.dataCard12, 0}, {Items.dataCard13, 0}, {Items.dataCard14, 0}, {Items.dataCard15, 0}, {Items.dataCard16, 0}, {Items.dataCard17, 0}, {Items.dataCard18, 0}, {Items.dataCard19, 0}, {Items.dataCard20, 0}, {Items.dataCard21, 0}, {Items.dataCard22, 0}, {Items.dataCard23, 0}, {Items.dataCard24, 0}, {Items.dataCard25, 0}, {Items.dataCard26, 0}, {Items.dataCard27, 0}, {Items.jadeOrb, 0}, {Items.lockCapsule, 0}, {Items.redOrb, 0}, {Items.blueOrb, 0}, {Items.enigmaStone, 0}, }).collect(Collectors.toMap(kv -> kv[0], kv -> kv[1]));
+export const balancedItemPrices: Map<number, number> = new Map<number, number>([
+    [Items.masterBall, 300], [Items.ultraBall, 120], [Items.greatBall, 60], [Items.pokeBall, 20],
+    [Items.safariBall, 50], [Items.netBall, 100], [Items.diveBall, 100], [Items.nestBall, 100],
+    [Items.repeatBall, 100], [Items.timerBall, 100], [Items.luxuryBall, 100], [Items.premierBall, 20],
+    [Items.duskBall, 100], [Items.healBall, 30], [Items.quickBall, 100], [Items.cherishBall, 20],
+    [Items.potion, 30], [Items.antidote, 10], [Items.burnHeal, 25], [Items.iceHeal, 25],
+    [Items.awakening, 25], [Items.paralyzeHeal, 20], [Items.fullRestore, 300], [Items.maxPotion, 250],
+    [Items.hyperPotion, 120], [Items.superPotion, 70], [Items.fullHeal, 60], [Items.revive, 150],
+    [Items.maxRevive, 400], [Items.freshWater, 40], [Items.sodaPop, 60], [Items.lemonade, 70],
+    [Items.moomooMilk, 80], [Items.energyPowder, 40], [Items.energyRoot, 110], [Items.healPowder, 45],
+    [Items.revivalHerb, 280], [Items.ether, 300], [Items.maxEther, 450], [Items.elixir, 1500],
+    [Items.maxElixir, 1800], [Items.lavaCookie, 45], [Items.berryJuice, 10], [Items.sacredAsh, 1000],
+    [Items.hpUp, 980], [Items.protein, 980], [Items.iron, 980], [Items.carbos, 980],
+    [Items.calcium, 980], [Items.rareCandy, 1000], [Items.ppUp, 980], [Items.zinc, 980],
+    [Items.ppMax, 2490], [Items.oldGateau, 45], [Items.guardSpec, 70], [Items.direHit, 65],
+    [Items.xAttack, 50], [Items.xDefense, 55], [Items.xSpeed, 35], [Items.xAccuracy, 95],
+    [Items.xSpAtk, 35], [Items.xSpDef, 35], [Items.pokeDoll, 100], [Items.fluffyTail, 100],
+    [Items.blueFlute, 2], [Items.yellowFlute, 2], [Items.redFlute, 2], [Items.blackFlute, 2],
+    [Items.whiteFlute, 2], [Items.shoalSalt, 2], [Items.shoalShell, 2], [Items.redShard, 40],
+    [Items.blueShard, 40], [Items.yellowShard, 40], [Items.greenShard, 40], [Items.superRepel, 50],
+    [Items.maxRepel, 70], [Items.escapeRope, 55], [Items.repel, 35], [Items.sunStone, 300],
+    [Items.moonStone, 300], [Items.fireStone, 300], [Items.thunderStone, 300], [Items.waterStone, 300],
+    [Items.leafStone, 300], [Items.tinyMushroom, 50], [Items.bigMushroom, 500], [Items.pearl, 140],
+    [Items.bigPearl, 750], [Items.stardust, 200], [Items.starPiece, 980], [Items.nugget, 1000],
+    [Items.heartScale, 500], [Items.honey, 50], [Items.growthMulch, 20], [Items.dampMulch, 20],
+    [Items.stableMulch, 20], [Items.gooeyMulch, 20], [Items.rootFossil, 500], [Items.clawFossil, 500],
+    [Items.helixFossil, 500], [Items.domeFossil, 500], [Items.oldAmber, 800], [Items.armorFossil, 500],
+    [Items.skullFossil, 500], [Items.rareBone, 1000], [Items.shinyStone, 300], [Items.duskStone, 300],
+    [Items.dawnStone, 300], [Items.ovalStone, 300], [Items.oddKeystone, 210], [Items.griseousOrb, 1000],
+    [Items.tea, 0], [Items.unused114, 0], [Items.autograph, 0], [Items.douseDrive, 0],
+    [Items.shockDrive, 0], [Items.burnDrive, 0], [Items.chillDrive, 0], [Items.unused120, 0],
+    [Items.pokemonBox, 0], [Items.medicinePocket, 0], [Items.tmCase, 0], [Items.candyJar, 0],
+    [Items.powerUpPocket, 0], [Items.clothingTrunk, 0], [Items.catchingPocket, 0], [Items.battlePocket, 0],
+    [Items.unused129, 0], [Items.unused130, 0], [Items.unused131, 0], [Items.unused132, 0],
+    [Items.unused133, 0], [Items.sweetHeart, 0], [Items.adamantOrb, 1000], [Items.lustrousOrb, 1000],
+    [Items.mail1, 5], [Items.mail2, 5], [Items.mail3, 5], [Items.mail4, 5], [Items.mail5, 5],
+    [Items.mail6, 5], [Items.mail7, 5], [Items.mail8, 5], [Items.mail9, 5], [Items.mail10, 5],
+    [Items.mail11, 5], [Items.mail12, 5], [Items.cheriBerry, 20], [Items.chestoBerry, 25],
+    [Items.pechaBerry, 10], [Items.rawstBerry, 25], [Items.aspearBerry, 25], [Items.leppaBerry, 300],
+    [Items.oranBerry, 5], [Items.persimBerry, 20], [Items.lumBerry, 50], [Items.sitrusBerry, 50],
+    [Items.figyBerry, 10], [Items.wikiBerry, 10], [Items.magoBerry, 10], [Items.aguavBerry, 10],
+    [Items.iapapaBerry, 10], [Items.razzBerry, 50], [Items.blukBerry, 50], [Items.nanabBerry, 50],
+    [Items.wepearBerry, 50], [Items.pinapBerry, 50], [Items.pomegBerry, 50], [Items.kelpsyBerry, 50],
+    [Items.qualotBerry, 50], [Items.hondewBerry, 50], [Items.grepaBerry, 50], [Items.tamatoBerry, 50],
+    [Items.cornnBerry, 50], [Items.magostBerry, 50], [Items.rabutaBerry, 50], [Items.nomelBerry, 50],
+    [Items.spelonBerry, 50], [Items.pamtreBerry, 50], [Items.watmelBerry, 50], [Items.durinBerry, 50],
+    [Items.belueBerry, 50], [Items.occaBerry, 100], [Items.passhoBerry, 100], [Items.wacanBerry, 100],
+    [Items.rindoBerry, 100], [Items.yacheBerry, 100], [Items.chopleBerry, 100], [Items.kebiaBerry, 100],
+    [Items.shucaBerry, 100], [Items.cobaBerry, 100], [Items.payapaBerry, 100], [Items.tangaBerry, 100],
+    [Items.chartiBerry, 100], [Items.kasibBerry, 100], [Items.habanBerry, 100], [Items.colburBerry, 100],
+    [Items.babiriBerry, 100], [Items.chilanBerry, 100], [Items.liechiBerry, 100], [Items.ganlonBerry, 100],
+    [Items.salacBerry, 100], [Items.petayaBerry, 100], [Items.apicotBerry, 100], [Items.lansatBerry, 100],
+    [Items.starfBerry, 100], [Items.enigmaBerry, 100], [Items.micleBerry, 100], [Items.custapBerry, 100],
+    [Items.jabocaBerry, 100], [Items.rowapBerry, 100], [Items.brightPowder, 300], [Items.whiteHerb, 100],
+    [Items.machoBrace, 300], [Items.expShare, 600], [Items.quickClaw, 450], [Items.sootheBell, 100],
+    [Items.mentalHerb, 100], [Items.choiceBand, 1000], [Items.kingsRock, 500], [Items.silverPowder, 200],
+    [Items.amuletCoin, 1500], [Items.cleanseTag, 100], [Items.soulDew, 20], [Items.deepSeaTooth, 300],
+    [Items.deepSeaScale, 300], [Items.smokeBall, 20], [Items.everstone, 20], [Items.focusBand, 300],
+    [Items.luckyEgg, 1000], [Items.scopeLens, 500], [Items.metalCoat, 300], [Items.leftovers, 1000],
+    [Items.dragonScale, 300], [Items.lightBall, 10], [Items.softSand, 200], [Items.hardStone, 200],
+    [Items.miracleSeed, 200], [Items.blackGlasses, 200], [Items.blackBelt, 200], [Items.magnet, 200],
+    [Items.mysticWater, 200], [Items.sharpBeak, 200], [Items.poisonBarb, 200], [Items.neverMeltIce, 200],
+    [Items.spellTag, 200], [Items.twistedSpoon, 200], [Items.charcoal, 200], [Items.dragonFang, 200],
+    [Items.silkScarf, 200], [Items.upgrade, 300], [Items.shellBell, 600], [Items.seaIncense, 200],
+    [Items.laxIncense, 300], [Items.luckyPunch, 1], [Items.metalPowder, 1], [Items.thickClub, 50],
+    [Items.leek, 20], [Items.redScarf, 10], [Items.blueScarf, 10], [Items.pinkScarf, 10],
+    [Items.greenScarf, 10], [Items.yellowScarf, 10], [Items.wideLens, 150], [Items.muscleBand, 200],
+    [Items.wiseGlasses, 200], [Items.expertBelt, 600], [Items.lightClay, 150], [Items.lifeOrb, 1000],
+    [Items.powerHerb, 100], [Items.toxicOrb, 150], [Items.flameOrb, 150], [Items.quickPowder, 1],
+    [Items.focusSash, 200], [Items.zoomLens, 150], [Items.metronome, 300], [Items.ironBall, 100],
+    [Items.laggingTail, 100], [Items.destinyKnot, 150], [Items.blackSludge, 500], [Items.icyRock, 20],
+    [Items.smoothRock, 20], [Items.heatRock, 20], [Items.dampRock, 20], [Items.gripClaw, 150],
+    [Items.choiceScarf, 1000], [Items.stickyBarb, 150], [Items.powerBracer, 300], [Items.powerBelt, 300],
+    [Items.powerLens, 300], [Items.powerBand, 300], [Items.powerAnklet, 300], [Items.powerWeight, 300],
+    [Items.shedShell, 50], [Items.bigRoot, 150], [Items.choiceSpecs, 1000], [Items.flamePlate, 200],
+    [Items.splashPlate, 200], [Items.zapPlate, 200], [Items.meadowPlate, 200], [Items.iciclePlate, 200],
+    [Items.fistPlate, 200], [Items.toxicPlate, 200], [Items.earthPlate, 200], [Items.skyPlate, 200],
+    [Items.mindPlate, 200], [Items.insectPlate, 200], [Items.stonePlate, 200], [Items.spookyPlate, 200],
+    [Items.dracoPlate, 200], [Items.dreadPlate, 200], [Items.ironPlate, 200], [Items.oddIncense, 200],
+    [Items.rockIncense, 200], [Items.fullIncense, 100], [Items.waveIncense, 200], [Items.roseIncense, 200],
+    [Items.luckIncense, 1500], [Items.pureIncense, 100], [Items.protector, 300], [Items.electirizer, 300],
+    [Items.magmarizer, 300], [Items.dubiousDisc, 300], [Items.reaperCloth, 300], [Items.razorClaw, 500],
+    [Items.razorFang, 500], [Items.tm01, 300], [Items.tm02, 300], [Items.tm03, 300], [Items.tm04, 150],
+    [Items.tm05, 100], [Items.tm06, 300], [Items.tm07, 200], [Items.tm08, 150], [Items.tm09, 200],
+    [Items.tm10, 200], [Items.tm11, 200], [Items.tm12, 150], [Items.tm13, 300], [Items.tm14, 550],
+    [Items.tm15, 750], [Items.tm16, 200], [Items.tm17, 200], [Items.tm18, 200], [Items.tm19, 300],
+    [Items.tm20, 200], [Items.tm21, 100], [Items.tm22, 300], [Items.tm23, 300], [Items.tm24, 300],
+    [Items.tm25, 550], [Items.tm26, 300], [Items.tm27, 100], [Items.tm28, 200], [Items.tm29, 300],
+    [Items.tm30, 300], [Items.tm31, 300], [Items.tm32, 100], [Items.tm33, 200], [Items.tm34, 300],
+    [Items.tm35, 300], [Items.tm36, 300], [Items.tm37, 200], [Items.tm38, 550], [Items.tm39, 200],
+    [Items.tm40, 300], [Items.tm41, 150], [Items.tm42, 300], [Items.tm43, 200], [Items.tm44, 300],
+    [Items.tm45, 300], [Items.tm46, 200], [Items.tm47, 300], [Items.tm48, 300], [Items.tm49, 150],
+    [Items.tm50, 550], [Items.tm51, 200], [Items.tm52, 550], [Items.tm53, 300], [Items.tm54, 200],
+    [Items.tm55, 300], [Items.tm56, 200], [Items.tm57, 300], [Items.tm58, 200], [Items.tm59, 300],
+    [Items.tm60, 300], [Items.tm61, 200], [Items.tm62, 300], [Items.tm63, 200], [Items.tm64, 750],
+    [Items.tm65, 300], [Items.tm66, 300], [Items.tm67, 100], [Items.tm68, 750], [Items.tm69, 150],
+    [Items.tm70, 100], [Items.tm71, 300], [Items.tm72, 300], [Items.tm73, 200], [Items.tm74, 300],
+    [Items.tm75, 150], [Items.tm76, 200], [Items.tm77, 150], [Items.tm78, 150], [Items.tm79, 300],
+    [Items.tm80, 300], [Items.tm81, 300], [Items.tm82, 100], [Items.tm83, 200], [Items.tm84, 300],
+    [Items.tm85, 300], [Items.tm86, 300], [Items.tm87, 150], [Items.tm88, 300], [Items.tm89, 300],
+    [Items.tm90, 200], [Items.tm91, 300], [Items.tm92, 550], [Items.hm01, 0], [Items.hm02, 0],
+    [Items.hm03, 0], [Items.hm04, 0], [Items.hm05, 0], [Items.hm06, 0], [Items.hm07, 0],
+    [Items.hm08, 0], [Items.explorerKit, 0], [Items.lootSack, 0], [Items.ruleBook, 0],
+    [Items.pokeRadar, 0], [Items.pointCard, 0], [Items.journal, 0], [Items.sealCase, 0],
+    [Items.fashionCase, 0], [Items.sealBag, 0], [Items.palPad, 0], [Items.worksKey, 0],
+    [Items.oldCharm, 0], [Items.galacticKey, 0], [Items.redChain, 0], [Items.townMap, 0],
+    [Items.vsSeeker, 0], [Items.coinCase, 0], [Items.oldRod, 0], [Items.goodRod, 0],
+    [Items.superRod, 0], [Items.sprayduck, 0], [Items.poffinCase, 0], [Items.bike, 0],
+    [Items.suiteKey, 0], [Items.oaksLetter, 0], [Items.lunarWing, 0], [Items.memberCard, 0],
+    [Items.azureFlute, 0], [Items.ssTicketJohto, 0], [Items.contestPass, 0], [Items.magmaStone, 0],
+    [Items.parcelSinnoh, 0], [Items.coupon1, 0], [Items.coupon2, 0], [Items.coupon3, 0],
+    [Items.storageKeySinnoh, 0], [Items.secretPotion, 0], [Items.vsRecorder, 0], [Items.gracidea, 0],
+    [Items.secretKeySinnoh, 0], [Items.apricornBox, 0], [Items.unownReport, 0], [Items.berryPots, 0],
+    [Items.dowsingMachine, 0], [Items.blueCard, 0], [Items.slowpokeTail, 0], [Items.clearBell, 0],
+    [Items.cardKeyJohto, 0], [Items.basementKeyJohto, 0], [Items.squirtBottle, 0], [Items.redScale, 0],
+    [Items.lostItem, 0], [Items.pass, 0], [Items.machinePart, 0], [Items.silverWing, 0],
+    [Items.rainbowWing, 0], [Items.mysteryEgg, 0], [Items.redApricorn, 2], [Items.blueApricorn, 2],
+    [Items.yellowApricorn, 2], [Items.greenApricorn, 2], [Items.pinkApricorn, 2], [Items.whiteApricorn, 2],
+    [Items.blackApricorn, 2], [Items.fastBall, 30], [Items.levelBall, 30], [Items.lureBall, 30],
+    [Items.heavyBall, 30], [Items.loveBall, 30], [Items.friendBall, 30], [Items.moonBall, 30],
+    [Items.sportBall, 30], [Items.parkBall, 0], [Items.photoAlbum, 0], [Items.gbSounds, 0],
+    [Items.tidalBell, 0], [Items.rageCandyBar, 0], [Items.dataCard01, 0], [Items.dataCard02, 0],
+    [Items.dataCard03, 0], [Items.dataCard04, 0], [Items.dataCard05, 0], [Items.dataCard06, 0],
+    [Items.dataCard07, 0], [Items.dataCard08, 0], [Items.dataCard09, 0], [Items.dataCard10, 0],
+    [Items.dataCard11, 0], [Items.dataCard12, 0], [Items.dataCard13, 0], [Items.dataCard14, 0],
+    [Items.dataCard15, 0], [Items.dataCard16, 0], [Items.dataCard17, 0], [Items.dataCard18, 0],
+    [Items.dataCard19, 0], [Items.dataCard20, 0], [Items.dataCard21, 0], [Items.dataCard22, 0],
+    [Items.dataCard23, 0], [Items.dataCard24, 0], [Items.dataCard25, 0], [Items.dataCard26, 0],
+    [Items.dataCard27, 0], [Items.jadeOrb, 0], [Items.lockCapsule, 0], [Items.redOrb, 0],
+    [Items.blueOrb, 0], [Items.enigmaStone, 0],
+]);
 
 export const typeTable: (string | null)[] = constructTypeTable();
 
@@ -1484,4 +1513,20 @@ function setMultiBattleStatus(allTrainers: any[], status: MultiBattleStatus, ...
     allTrainers[num - 1].multiBattleStatus = status;
     }
     }
+}
+
+export function getAllowedItems(): ItemList {
+    return allowedItems;
+}
+
+export function getNonBadItems(): ItemList {
+    return nonBadItems;
+}
+
+export function getRegularShopItems(): number[] {
+    return regularShopItems;
+}
+
+export function getOpShopItems(): number[] {
+    return opShopItems;
 }

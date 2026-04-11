@@ -1239,7 +1239,7 @@ export class Gen1RomHandler extends AbstractGBCRomHandler {
   // randomEncounters, area1to1Encounters, and game1to1Encounters
   // are now concrete methods in AbstractRomHandler
 
-  randomizeWildHeldItems(_settings: Settings): void {}
+  // randomizeWildHeldItems inherited from AbstractRomHandler
 
   // changeCatchRates and minimumCatchRate are now concrete methods in AbstractRomHandler
 
@@ -1274,12 +1274,7 @@ export class Gen1RomHandler extends AbstractGBCRomHandler {
   // forceFullyEvolvedTrainerPokes, onlyChangeTrainerLevels, addTrainerPokemon,
   // doubleBattleMode are now concrete in AbstractRomHandler
 
-  getMoveSelectionPoolAtLevel(
-    _tp: TrainerPokemon,
-    _cyclicEvolutions: boolean
-  ): Move[] {
-    return [];
-  }
+  // getMoveSelectionPoolAtLevel inherited from AbstractRomHandler
 
   // pickTrainerMovesets is now concrete in AbstractRomHandler
 
@@ -1299,9 +1294,7 @@ export class Gen1RomHandler extends AbstractGBCRomHandler {
 
   // randomizeMovesLearnt inherited from AbstractRomHandler
 
-  randomizeEggMoves(_settings: Settings): void {
-    // Gen 1 has no egg moves
-  }
+  // randomizeEggMoves inherited from AbstractRomHandler (no-op: Gen1 has no egg moves)
 
   // orderDamagingMovesByDamage, metronomeOnlyMode inherited from AbstractRomHandler
 
@@ -1357,9 +1350,9 @@ export class Gen1RomHandler extends AbstractGBCRomHandler {
 
   // TM/HM compatibility methods inherited from AbstractRomHandler
 
-  randomizeMoveTutorMoves(_settings: Settings): void {}
+  // randomizeMoveTutorMoves inherited from AbstractRomHandler
 
-  randomizeMoveTutorCompatibility(_settings: Settings): void {}
+  // randomizeMoveTutorCompatibility inherited from AbstractRomHandler
 
   fullMoveTutorCompatibility(): void {}
 
