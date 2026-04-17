@@ -51,14 +51,15 @@
 
 /*
  * Single palette:
- *   bg     #262626   background
+ *   bg     #141414   page background (body)
+ *   card    #2e2e2e   section surfaces (cards/popovers sit higher)
  *   primary #FFE66D  warm yellow — used for CTAs, active states, highlights
  *   text    #ffffff  foreground
  *
- * Secondary/muted/card/border are derived neutrals that sit cleanly on #262626.
+ * Secondary/muted/card/border are derived neutrals that sit cleanly on #141414.
  */
 :root {
-  --background: #262626;
+  --background: #141414;
   --foreground: #ffffff;
 
   --card: #2e2e2e;
@@ -108,7 +109,7 @@
  * components which key off the dark selector still render correctly.
  */
 .dark {
-  --background: #262626;
+  --background: #141414;
   --foreground: #ffffff;
   --card: #2e2e2e;
   --card-foreground: #ffffff;
