@@ -23,6 +23,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { FileFunctions } from "../utils/file-functions";
+import { BLZCoder } from "../compressors/blz-coder";
 import type { NDSRom } from "./nds-rom";
 
 enum Extracted {
@@ -69,10 +70,25 @@ export class NDSY9Entry {
       }
       this.originalCRC = FileFunctions.getCRC32(buf);
 
-      // Note: BLZ compression/decompression is not ported yet.
-      // When compress_flag != 0 and original_size == compressed_size,
-      // the data would be BLZ-decompressed here.
-      let result = buf;
+      let result: Uint8Array = buf;
+      // Overlays can be BLZ-compressed. The NDS `y9` table stores both the
+      // original (compressed) size and a separate "decompressed" size, but
+      // when `compress_flag` is set and `original_size == compressed_size`
+      // (i.e. the y9 entry still reflects the compressed image), we need to
+      // decompress it before handing it back to callers. Mirrors Java
+      // NDSY9Entry.getContents.
+      if (
+        this.compress_flag !== 0 &&
+        this.original_size === this.compressed_size &&
+        this.compressed_size !== 0
+      ) {
+        const decoded = new BLZCoder(false).decodePub(buf, `overlay ${this.overlay_id}`);
+        if (decoded === null) {
+          throw new Error(`BLZ decompression failed for overlay ${this.overlay_id}`);
+        }
+        result = new Uint8Array(decoded);
+        this.decompressed_data = true;
+      }
 
       if (this.parent.isWritingEnabled()) {
         const tmpDir = this.parent.getTmpFolder();
@@ -117,11 +133,16 @@ export class NDSY9Entry {
     if (this.status === Extracted.NOT) {
       return null;
     }
-    const buf = this.getContents();
-    // Note: BLZ re-compression would happen here if decompressed_data is true.
-    // BLZ compression is not yet ported.
+    let buf: Uint8Array = this.getContents();
+    // If we decompressed this overlay on load, re-compress before handing
+    // the bytes back to the ROM saver so the game's own overlay loader can
+    // decompress it at runtime. Mirrors Java NDSY9Entry.getOverrideContents.
     if (this.decompressed_data) {
-      // Would BLZ-encode and update compressed_size
+      const encoded = new BLZCoder(false).encodePub(buf, false, `overlay ${this.overlay_id}`);
+      if (encoded === null) {
+        throw new Error(`BLZ re-compression failed for overlay ${this.overlay_id}`);
+      }
+      buf = new Uint8Array(encoded);
       this.compressed_size = buf.length;
     }
     return buf;

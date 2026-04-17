@@ -716,6 +716,28 @@ export class Gen4RomHandler extends AbstractDSRomHandler {
       (this.romEntry.romType === Gen4Constants.Type_DP && this.romEntry.roamingPokemon.length > 0) ||
       (this.romEntry.romType === Gen4Constants.Type_Plat && this.romEntry.tweakFiles.has('NewRoamerSubroutineTweak')) ||
       (this.romEntry.romType === Gen4Constants.Type_HGSS && this.romEntry.tweakFiles.has('NewRoamerSubroutineTweak'));
+
+    // For HGSS with the catching-tutorial tweak available, pre-extend the ARM9
+    // and apply the tweak during load. Mirrors upstream Java Gen4RomHandler
+    // (loadedROM block for NewCatchingTutorialSubroutineTweak): both the
+    // catching-tutorial patch and the later roamer patch need the ARM9
+    // extension, but either can be requested independently. Extending now
+    // avoids ordering issues with misc tweaks (e.g. randomizeCatchingTutorial)
+    // and lets extendARM9 run exactly once (arm9Extended flag) regardless of
+    // which subsequent step first needs the extension.
+    if (
+      this.romEntry.romType === Gen4Constants.Type_HGSS &&
+      this.romEntry.tweakFiles.has('NewCatchingTutorialSubroutineTweak')
+    ) {
+      const extendBy = romEntryGetInt(this.romEntry, 'Arm9ExtensionSize');
+      this.arm9 = this.extendARM9(
+        this.arm9,
+        extendBy,
+        romEntryGetString(this.romEntry, 'TCMCopyingPrefix'),
+        Gen4Constants.arm9Offset,
+      );
+      this.applyIPSPatch(this.arm9, 'NewCatchingTutorialSubroutineTweak');
+    }
   }
 
   protected savingROM(): void {
@@ -3943,7 +3965,15 @@ export class Gen4RomHandler extends AbstractDSRomHandler {
     for (let i = 0; i < this.romEntry.staticPokemon.length; i++) {
       const statP = this.romEntry.staticPokemon[i];
       const se = new StaticEncounter();
-      let newPK = this.pokes[readWord(sN.files[statP.speciesEntries[0].file], statP.speciesEntries[0].offset)]!;
+      const spEntry = statP.speciesEntries[0];
+      const speciesId = readWord(sN.files[spEntry.file], spEntry.offset);
+      let newPK = this.pokes[speciesId];
+      if (newPK == null) {
+        throw new Error(
+          `Static Pokemon #${i}: script file ${spEntry.file} @0x${spEntry.offset.toString(16)} ` +
+          `returned species ${speciesId}, but this.pokes[${speciesId}] is null.`,
+        );
+      }
       const forme = statP.formeEntries.length > 0 ? sN.files[statP.formeEntries[0].file][statP.formeEntries[0].offset] : 0;
       newPK = this.getAltFormeOfPokemon(newPK, forme);
       se.pkmn = newPK;
@@ -3963,14 +3993,35 @@ export class Gen4RomHandler extends AbstractDSRomHandler {
       const sc = this.romEntry.arrayEntries.get('StaticPokemonTradeScripts')!;
       const so = this.romEntry.arrayEntries.get('StaticPokemonTradeLevelOffsets')!;
       for (let i = 0; i < tr.length; i++) {
-        const se = new StaticEncounter(this.pokes[this.readLong(tNARC.files[tr[i]], 0)]!);
+        const speciesId = this.readLong(tNARC.files[tr[i]], 0);
+        const pk = this.pokes[speciesId];
+        if (pk == null) {
+          throw new Error(
+            `Static Pokemon (trade #${i}): trade NARC entry ${tr[i]} returned ` +
+            `species ${speciesId}, but this.pokes[${speciesId}] is null.`,
+          );
+        }
+        const se = new StaticEncounter(pk);
         se.level = sN.files[sc[i]][so[i]];
         sp.push(se);
       }
     }
     if (romEntryGetInt(this.romEntry, 'MysteryEggOffset') > 0) {
       const ov = this.readOverlay(romEntryGetInt(this.romEntry, 'FieldOvlNumber'));
-      if (ov) { const se = new StaticEncounter(this.pokes[ov[romEntryGetInt(this.romEntry, 'MysteryEggOffset')] & 0xFF]!); se.isEgg = true; sp.push(se); }
+      if (ov) {
+        const mysteryEggOffset = romEntryGetInt(this.romEntry, 'MysteryEggOffset');
+        const speciesId = ov[mysteryEggOffset] & 0xFF;
+        const pk = this.pokes[speciesId];
+        if (pk == null) {
+          throw new Error(
+            `Static Pokemon (mystery egg): FieldOvl @0x${mysteryEggOffset.toString(16)} ` +
+            `returned species ${speciesId}, but this.pokes[${speciesId}] is null.`,
+          );
+        }
+        const se = new StaticEncounter(pk);
+        se.isEgg = true;
+        sp.push(se);
+      }
     }
     if (romEntryGetInt(this.romEntry, 'FossilTableOffset') > 0) {
       let ftD: Uint8Array = this.arm9;
@@ -3978,7 +4029,20 @@ export class Gen4RomHandler extends AbstractDSRomHandler {
       const fls = sN.files[romEntryGetInt(this.romEntry, 'FossilLevelScriptNumber')];
       const lv = fls[romEntryGetInt(this.romEntry, 'FossilLevelOffset')];
       if (this.romEntry.romType === Gen4Constants.Type_HGSS) { const ov = this.readOverlay(romEntryGetInt(this.romEntry, 'FossilTableOvlNumber')); if (ov) ftD = ov; }
-      for (let f = 0; f < Gen4Constants.fossilCount; f++) { const se = new StaticEncounter(this.pokes[readWord(ftD, bo + 2 + f * 4)]!); se.level = lv; sp.push(se); }
+      for (let f = 0; f < Gen4Constants.fossilCount; f++) {
+        const offset = bo + 2 + f * 4;
+        const speciesId = readWord(ftD, offset);
+        const pk = this.pokes[speciesId];
+        if (pk == null) {
+          throw new Error(
+            `Static Pokemon (fossil #${f}): @0x${offset.toString(16)} returned species ` +
+            `${speciesId}, but this.pokes[${speciesId}] is null. (ftD len=${ftD.length})`,
+          );
+        }
+        const se = new StaticEncounter(pk);
+        se.level = lv;
+        sp.push(se);
+      }
     }
     if (this.roamerRandomizationEnabled) { this.getRoamersHelper(sp); }
     return sp;
@@ -4048,13 +4112,33 @@ export class Gen4RomHandler extends AbstractDSRomHandler {
     } else if (this.romEntry.romType === Gen4Constants.Type_Plat || this.romEntry.romType === Gen4Constants.Type_HGSS) {
       const fso = this.romEntry.roamingPokemon[0].speciesCodeOffsets[0];
       if (this.arm9.length < fso || readWord(this.arm9, fso) === 0) {
+        const lengthBefore = this.arm9.length;
         this.arm9 = this.extendARM9(this.arm9, romEntryGetInt(this.romEntry, 'Arm9ExtensionSize'), romEntryGetString(this.romEntry, 'TCMCopyingPrefix'), Gen4Constants.arm9Offset);
         this.applyIPSPatch(this.arm9, 'NewRoamerSubroutineTweak');
+        if (this.arm9.length < fso + 2) {
+          throw new Error(
+            `getRoamersHelper: ARM9 too short after extend+patch for roamer species lookup ` +
+            `(lenBefore=${lengthBefore}, lenAfter=${this.arm9.length}, neededAtLeast=${fso + 2}). ` +
+            `This usually means BLZ decompression produced a shorter ARM9 than expected — ` +
+            `check nds-rom.ts decodePub output size against the Java reference.`,
+          );
+        }
       }
     }
     for (const r of this.romEntry.roamingPokemon) {
       const se = new StaticEncounter();
-      se.pkmn = this.pokes[readWord(this.arm9, r.speciesCodeOffsets[0])]!;
+      const speciesId = readWord(this.arm9, r.speciesCodeOffsets[0]);
+      const pk = this.pokes[speciesId];
+      if (pk == null) {
+        throw new Error(
+          `getRoamersHelper: roamer species offset 0x${r.speciesCodeOffsets[0].toString(16)} ` +
+          `returned species ${speciesId}, but this.pokes[${speciesId}] is null. ` +
+          `ARM9 length=${this.arm9.length}. The NewRoamerSubroutineTweak IPS patch may not ` +
+          `have populated the species bytes (check that the patch offsets fit inside the ` +
+          `extended ARM9).`,
+        );
+      }
+      se.pkmn = pk;
       se.level = r.levelCodeOffsets.length > 0 ? this.arm9[r.levelCodeOffsets[0]] : 1;
       statics.push(se);
     }
