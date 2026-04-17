@@ -27,6 +27,8 @@ import { SysConstants } from "../utils/sys-constants";
 import { crc16Calculate } from "./crc16";
 import { NDSFile } from "./nds-file";
 import { NDSY9Entry } from "./nds-y9-entry";
+import { BLZCoder } from "../compressors/blz-coder";
+import { RomFunctions } from "../utils/rom-functions";
 
 const ARM9_ALIGN = 0x1ff;
 const ARM7_ALIGN = 0x1ff;
@@ -265,7 +267,17 @@ export class NDSRom {
       if (this.arm9_open && this.arm9_changed) {
         // custom arm9
         let newARM9 = this.getARM9();
-        // Note: BLZ compression not yet ported
+        if (this.arm9_compressed) {
+          const encoded = new BLZCoder(false).encodePub(newARM9, true, "arm9.bin");
+          if (encoded === null) {
+            throw new Error("BLZ compression of ARM9 failed");
+          }
+          newARM9 = encoded;
+          if (this.arm9_szoffset > 0) {
+            const newValue = newARM9.length + this.arm9_ramoffset;
+            writeToByteArr(newARM9, this.arm9_szoffset, 4, newValue);
+          }
+        }
         arm9_size = newARM9.length;
         writeAt(dstFd, arm9_offset, newARM9);
         dstPos = arm9_offset + newARM9.length;
@@ -512,9 +524,33 @@ export class NDSRom {
           compSize < ((arm9.length * 11) / 10)
         ) {
           this.arm9_compressed = true;
-          // Note: BLZ decompression not yet ported
-          // The arm9 would be decompressed here
+          // The compressed ARM9 contains a 4-byte little-endian record of
+          // its own final (post-decompression) size in RAM, referenced as
+          // `arm9.length + arm9_ramoffset`. On save we need to rewrite this
+          // value with the new (re-compressed) length, so remember the
+          // offset of the record now while we still have the compressed
+          // image in hand.
+          const compLength = new Uint8Array(4);
+          writeToByteArr(compLength, 0, 4, arm9.length + this.arm9_ramoffset);
+          const foundOffsets = RomFunctions.search(arm9, compLength);
+          if (foundOffsets.length === 1) {
+            this.arm9_szoffset = foundOffsets[0];
+          } else {
+            throw new Error(
+              "Could not locate ARM9 size offset in the compressed image. May be a bad ROM.",
+            );
+          }
         }
+      }
+
+      if (this.arm9_compressed) {
+        const decoded = new BLZCoder(false).decodePub(arm9, "arm9.bin");
+        if (decoded === null) {
+          throw new Error("BLZ decompression of ARM9 failed");
+        }
+        // Wrap in a fresh Uint8Array to normalize the ArrayBuffer variance
+        // (decodePub returns Uint8Array<ArrayBufferLike>, arm9 is Uint8Array<ArrayBuffer>).
+        arm9 = new Uint8Array(decoded);
       }
 
       // Store the arm9
