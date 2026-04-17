@@ -38,8 +38,20 @@ export function existsSync(p: string): boolean {
   return vfs.exists(p);
 }
 
-export function readFileSync(p: string, _options?: unknown): Buffer {
-  return Buffer.from(resolveRead(p));
+type ReadFileOptions = { encoding?: string | null } | string | null | undefined;
+
+export function readFileSync(p: string, options?: ReadFileOptions): Buffer | string {
+  const bytes = resolveRead(p);
+  const encoding =
+    typeof options === "string"
+      ? options
+      : options && typeof options === "object"
+        ? options.encoding ?? null
+        : null;
+  if (encoding) {
+    return new TextDecoder(encoding === "utf-8" || encoding === "utf8" ? "utf-8" : encoding).decode(bytes);
+  }
+  return Buffer.from(bytes);
 }
 
 export function writeFileSync(p: string, data: Uint8Array | Buffer | string): void {

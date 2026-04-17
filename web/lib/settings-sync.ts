@@ -10,6 +10,9 @@
  * bridges the two.
  */
 
+// Install Buffer global before importing anything from ts-src.
+import "./browser-globals";
+
 import {
   Settings,
   BaseStatisticsMod,

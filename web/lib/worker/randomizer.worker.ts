@@ -16,6 +16,11 @@
  */
 
 import { Buffer } from "buffer";
+// ts-src expects `Buffer` to be a Node-style global. Install it BEFORE any
+// dynamic imports below so that module-scope code using `Buffer.alloc/from`
+// finds it.
+(globalThis as unknown as { Buffer: typeof Buffer }).Buffer = Buffer;
+
 import { bootstrapConfigs } from "../bootstrap";
 import { vfs } from "@/shims/virtual-fs";
 
@@ -86,13 +91,15 @@ self.onmessage = async (ev: MessageEvent<WorkerMessage>) => {
 
       const { getDefaultFactories } = await import("@randomizer/cli/cli-randomizer");
       const factories = getDefaultFactories();
+      const tried: string[] = [];
       for (const f of factories) {
-        if (f.isLoadable(key)) {
-          // Sniff the generation by creating a temp handler (without loading)
-          // We rely on the factory's classname since generations are fixed per factory.
+        const factoryName = (f.constructor?.name ?? "UnknownFactory").replace(/Factory$/, "");
+        try {
+          const loadable = f.isLoadable(key);
+          tried.push(`${factoryName}: ${loadable ? "accepted" : "rejected"}`);
+          if (!loadable) continue;
           const { RandomSource } = await import("@randomizer/utils/random-source");
           const handler = f.create(RandomSource.instance());
-          // Load just enough to identify the ROM
           handler.loadRom(key);
           const gen = handler.generationOfPokemon();
           const extension = handler.getDefaultExtension();
@@ -104,9 +111,15 @@ self.onmessage = async (ev: MessageEvent<WorkerMessage>) => {
             romCode: handler.getROMCode?.() ?? null,
           });
           return;
+        } catch (e) {
+          const err = e instanceof Error ? e.message : String(e);
+          tried.push(`${factoryName}: threw (${err})`);
         }
       }
-      post({ type: "detected", error: "Unsupported ROM format" });
+      post({
+        type: "detected",
+        error: `Unsupported ROM format. Tried: ${tried.join(" | ")}`,
+      });
       return;
     }
 
@@ -205,8 +218,5 @@ self.onmessage = async (ev: MessageEvent<WorkerMessage>) => {
     post({ type: "error", message: err.message || String(err), stack: err.stack });
   }
 };
-
-// Buffer needs to be globally available for ts-src code that uses Buffer.from etc.
-(globalThis as unknown as { Buffer: typeof Buffer }).Buffer = Buffer;
 
 export {};

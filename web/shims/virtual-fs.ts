@@ -37,17 +37,22 @@ export function normalizePath(p: string): string {
 
 class VirtualFS {
   private files = new Map<string, Uint8Array>();
-  // Secondary index: trailing "config/<file>" -> absolute-ish key
+  // Secondary index: any trailing segment path (including bare filename)
+  // -> absolute-ish key. Lets callers find files without knowing the exact
+  // path the shim resolved to.
   private tails = new Map<string, string>();
 
   register(key: string, data: Uint8Array): void {
     const norm = normalizePath(key);
     this.files.set(norm, data);
-    // Derive short tails like "config/foo.ini"
+    // Derive all trailing segments so callers can look up by any suffix
+    // (e.g. "gen3_offsets.ini", "config/gen3_offsets.ini", etc.)
     const parts = norm.split("/").filter(Boolean);
-    for (let i = Math.max(0, parts.length - 3); i < parts.length; i++) {
+    for (let i = 0; i < parts.length; i++) {
       const tail = parts.slice(i).join("/");
-      this.tails.set(tail, norm);
+      // Only claim a tail if no existing registration already does; first
+      // writer wins (bootstrap order is deterministic)
+      if (!this.tails.has(tail)) this.tails.set(tail, norm);
     }
   }
 
@@ -55,11 +60,20 @@ class VirtualFS {
     const norm = normalizePath(key);
     const direct = this.files.get(norm);
     if (direct) return direct;
-    // Try tail match
+    // Try tail match longest-first
     const parts = norm.split("/").filter(Boolean);
     for (let i = 0; i < parts.length; i++) {
       const tail = parts.slice(i).join("/");
       const resolved = this.tails.get(tail);
+      if (resolved) {
+        const hit = this.files.get(resolved);
+        if (hit) return hit;
+      }
+    }
+    // Last resort: match by bare filename anywhere in the VFS
+    const bare = parts[parts.length - 1];
+    if (bare) {
+      const resolved = this.tails.get(bare);
       if (resolved) {
         const hit = this.files.get(resolved);
         if (hit) return hit;
