@@ -32,6 +32,15 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <Nav />
         <div className="flex-1">{children}</div>
+        <a
+          href="https://github.com/justinelijahtaylor"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="justinelijahtaylor on GitHub"
+          className="fixed bottom-3 right-3 z-50 text-[10px] text-foreground/40 hover:text-primary transition-colors pointer-events-auto select-none"
+        >
+          justinelijahtaylor
+        </a>
       </body>
     </html>
   );
