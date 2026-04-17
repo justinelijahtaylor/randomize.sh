@@ -268,7 +268,12 @@ export class NDSRom {
         // custom arm9
         let newARM9 = this.getARM9();
         if (this.arm9_compressed) {
-          const encoded = new BLZCoder(false).encodePub(newARM9, true, "arm9.bin");
+          // The `arm9=true` constructor flag is critical: it tells BLZ to
+          // leave the first 0x4000 bytes uncompressed. The DS CPU executes
+          // from the start of the ARM9 before any decompression runtime is
+          // active, so compressing those bytes would crash on boot (white
+          // screen). Also `best=true` matches the Java saver.
+          const encoded = new BLZCoder(true).encodePub(newARM9, true, "arm9.bin");
           if (encoded === null) {
             throw new Error("BLZ compression of ARM9 failed");
           }
