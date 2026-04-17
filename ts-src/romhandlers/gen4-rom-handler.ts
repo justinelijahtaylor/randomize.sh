@@ -716,6 +716,28 @@ export class Gen4RomHandler extends AbstractDSRomHandler {
       (this.romEntry.romType === Gen4Constants.Type_DP && this.romEntry.roamingPokemon.length > 0) ||
       (this.romEntry.romType === Gen4Constants.Type_Plat && this.romEntry.tweakFiles.has('NewRoamerSubroutineTweak')) ||
       (this.romEntry.romType === Gen4Constants.Type_HGSS && this.romEntry.tweakFiles.has('NewRoamerSubroutineTweak'));
+
+    // For HGSS with the catching-tutorial tweak available, pre-extend the ARM9
+    // and apply the tweak during load. Mirrors upstream Java Gen4RomHandler
+    // (loadedROM block for NewCatchingTutorialSubroutineTweak): both the
+    // catching-tutorial patch and the later roamer patch need the ARM9
+    // extension, but either can be requested independently. Extending now
+    // avoids ordering issues with misc tweaks (e.g. randomizeCatchingTutorial)
+    // and lets extendARM9 run exactly once (arm9Extended flag) regardless of
+    // which subsequent step first needs the extension.
+    if (
+      this.romEntry.romType === Gen4Constants.Type_HGSS &&
+      this.romEntry.tweakFiles.has('NewCatchingTutorialSubroutineTweak')
+    ) {
+      const extendBy = romEntryGetInt(this.romEntry, 'Arm9ExtensionSize');
+      this.arm9 = this.extendARM9(
+        this.arm9,
+        extendBy,
+        romEntryGetString(this.romEntry, 'TCMCopyingPrefix'),
+        Gen4Constants.arm9Offset,
+      );
+      this.applyIPSPatch(this.arm9, 'NewCatchingTutorialSubroutineTweak');
+    }
   }
 
   protected savingROM(): void {
@@ -4048,13 +4070,33 @@ export class Gen4RomHandler extends AbstractDSRomHandler {
     } else if (this.romEntry.romType === Gen4Constants.Type_Plat || this.romEntry.romType === Gen4Constants.Type_HGSS) {
       const fso = this.romEntry.roamingPokemon[0].speciesCodeOffsets[0];
       if (this.arm9.length < fso || readWord(this.arm9, fso) === 0) {
+        const lengthBefore = this.arm9.length;
         this.arm9 = this.extendARM9(this.arm9, romEntryGetInt(this.romEntry, 'Arm9ExtensionSize'), romEntryGetString(this.romEntry, 'TCMCopyingPrefix'), Gen4Constants.arm9Offset);
         this.applyIPSPatch(this.arm9, 'NewRoamerSubroutineTweak');
+        if (this.arm9.length < fso + 2) {
+          throw new Error(
+            `getRoamersHelper: ARM9 too short after extend+patch for roamer species lookup ` +
+            `(lenBefore=${lengthBefore}, lenAfter=${this.arm9.length}, neededAtLeast=${fso + 2}). ` +
+            `This usually means BLZ decompression produced a shorter ARM9 than expected — ` +
+            `check nds-rom.ts decodePub output size against the Java reference.`,
+          );
+        }
       }
     }
     for (const r of this.romEntry.roamingPokemon) {
       const se = new StaticEncounter();
-      se.pkmn = this.pokes[readWord(this.arm9, r.speciesCodeOffsets[0])]!;
+      const speciesId = readWord(this.arm9, r.speciesCodeOffsets[0]);
+      const pk = this.pokes[speciesId];
+      if (pk == null) {
+        throw new Error(
+          `getRoamersHelper: roamer species offset 0x${r.speciesCodeOffsets[0].toString(16)} ` +
+          `returned species ${speciesId}, but this.pokes[${speciesId}] is null. ` +
+          `ARM9 length=${this.arm9.length}. The NewRoamerSubroutineTweak IPS patch may not ` +
+          `have populated the species bytes (check that the patch offsets fit inside the ` +
+          `extended ARM9).`,
+        );
+      }
+      se.pkmn = pk;
       se.level = r.levelCodeOffsets.length > 0 ? this.arm9[r.levelCodeOffsets[0]] : 1;
       statics.push(se);
     }
