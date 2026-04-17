@@ -60,7 +60,7 @@ function FieldRenderer({ field }: { field: Field }) {
             </RadioGroup>
           )}
         />
-        {field.help && <p className="text-xs text-zinc-500">{field.help}</p>}
+        {field.help && <p className="text-xs text-muted-foreground">{field.help}</p>}
       </div>
     );
   }
@@ -81,7 +81,7 @@ function FieldRenderer({ field }: { field: Field }) {
               <Label htmlFor={id} className="font-normal cursor-pointer">
                 {field.label}
               </Label>
-              {field.help && <p className="text-xs text-zinc-500">{field.help}</p>}
+              {field.help && <p className="text-xs text-muted-foreground">{field.help}</p>}
             </div>
           </div>
         )}
@@ -100,7 +100,7 @@ function FieldRenderer({ field }: { field: Field }) {
               <Label htmlFor={id} className="text-sm">
                 {field.label}
               </Label>
-              <span className="text-sm text-zinc-500 tabular-nums">
+              <span className="text-sm text-muted-foreground tabular-nums">
                 {Number(f.value ?? 0)}
               </span>
             </div>
@@ -180,7 +180,7 @@ function FieldRenderer({ field }: { field: Field }) {
 
   // multi-select-pokemon / unhandled - show placeholder
   return (
-    <div className="text-xs text-zinc-500">
+    <div className="text-xs text-muted-foreground">
       (Unsupported field type: {field.kind.type} — <code>{field.name}</code>)
     </div>
   );
@@ -199,7 +199,7 @@ function GroupRenderer({ group, gen }: { group: FieldGroup; gen: number }) {
 
   return (
     <div className="space-y-3">
-      <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+      <h3 className="text-sm font-semibold text-primary">
         {group.title}
       </h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
@@ -224,7 +224,7 @@ function TabRenderer({ tab, gen }: { tab: Tab; gen: number }) {
 
   if (visibleGroups.length === 0) {
     return (
-      <div className="text-sm text-zinc-500 py-8 text-center">
+      <div className="text-sm text-muted-foreground py-8 text-center">
         No applicable options for Gen {gen} on this tab.
       </div>
     );

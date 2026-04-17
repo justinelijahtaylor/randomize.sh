@@ -148,7 +148,7 @@ export default function Home() {
         <h1 className="text-3xl font-bold tracking-tight">
           Universal Pokemon Randomizer ZX
         </h1>
-        <p className="text-zinc-600 dark:text-zinc-400">
+        <p className="text-muted-foreground">
           Randomize your Pokemon ROMs entirely in your browser. Your ROM never
           leaves your device.
         </p>

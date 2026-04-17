@@ -76,7 +76,7 @@ export function ProgressPanel({ state }: { state: ProgressState }) {
         <div>
           <div className="flex justify-between text-sm mb-2">
             <span className="font-medium">{state.stage || "Starting…"}</span>
-            <span className="text-zinc-500">{Math.round(state.percent)}%</span>
+            <span className="text-muted-foreground">{Math.round(state.percent)}%</span>
           </div>
           <Progress value={state.percent} />
         </div>
@@ -105,16 +105,16 @@ export function ProgressPanel({ state }: { state: ProgressState }) {
 
         <div
           ref={logRef}
-          className="h-48 overflow-auto rounded-md border bg-zinc-950 p-3 font-mono text-xs text-zinc-300"
+          className="h-48 overflow-auto rounded-md border bg-black/40 p-3 font-mono text-xs text-foreground/80"
         >
           {state.logLines.length === 0 && (
-            <div className="text-zinc-500">Waiting for log output…</div>
+            <div className="text-muted-foreground">Waiting for log output…</div>
           )}
           {state.logLines.map((l, i) => (
             <div
               key={i}
               className={
-                l.level === "error" ? "text-red-400" : "text-zinc-300"
+                l.level === "error" ? "text-destructive" : "text-foreground/80"
               }
             >
               {l.line}

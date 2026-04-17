@@ -83,7 +83,7 @@ export function RomUpload({ client, onRomLoaded, loadedRom }: Props) {
             className={`flex flex-col items-center justify-center cursor-pointer rounded-lg border-2 border-dashed p-10 text-center transition-colors ${
               dragging
                 ? "border-primary bg-primary/5"
-                : "border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                : "border-border hover:bg-accent/50"
             }`}
           >
             <input
@@ -97,7 +97,7 @@ export function RomUpload({ client, onRomLoaded, loadedRom }: Props) {
             <p className="text-lg font-medium mb-1">
               {isLoading ? "Detecting ROM…" : "Drop a ROM here or click to select"}
             </p>
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-muted-foreground">
               Gen 1–4 supported (Red/Blue/Yellow, Gold/Silver/Crystal,
               Ruby/Sapphire/Emerald/FR/LG, Diamond/Pearl/Platinum/HG/SS)
             </p>
@@ -108,7 +108,7 @@ export function RomUpload({ client, onRomLoaded, loadedRom }: Props) {
           <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
             <div>
               <div className="font-medium">{loadedRom.filename}</div>
-              <div className="text-sm text-zinc-500 flex gap-2 mt-1 flex-wrap">
+              <div className="text-sm text-muted-foreground flex gap-2 mt-1 flex-wrap">
                 <Badge variant="secondary">Gen {loadedRom.detect.generation}</Badge>
                 {loadedRom.detect.romName && (
                   <Badge variant="outline">{loadedRom.detect.romName}</Badge>
@@ -118,7 +118,7 @@ export function RomUpload({ client, onRomLoaded, loadedRom }: Props) {
                     {loadedRom.detect.romCode}
                   </Badge>
                 )}
-                <span className="text-zinc-500">
+                <span className="text-muted-foreground">
                   {(loadedRom.bytes.byteLength / (1024 * 1024)).toFixed(1)} MB
                 </span>
               </div>
