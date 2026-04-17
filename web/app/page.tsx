@@ -174,6 +174,18 @@ export default function Home() {
         <h1 className="text-3xl font-bold tracking-tight">
           randomize.sh
         </h1>
+        <p className="text-sm text-muted-foreground">
+          Forked from{" "}
+          <a
+            href="https://github.com/Ajarmar/universal-pokemon-randomizer-zx"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline"
+          >
+            Universal Pokemon Randomizer ZX
+          </a>{" "}
+          by Ajarmar
+        </p>
         <p className="text-muted-foreground">
           Randomize your Pokemon ROMs entirely in your browser. Your ROM never
           leaves your device.
