@@ -45,3 +45,15 @@ out/
 node_modules/
 dist/
 /roms/
+# macOS
+.DS_Store
+
+# Test settings artifacts
+test-settings-*.rnqs
+
+# Node / TypeScript artifacts at the repo root (the web/ and ts-src/ projects
+# already have their own .gitignores; this is a safety net)
+node_modules/
+dist/
+.next/
+out/

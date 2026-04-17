@@ -1215,4 +1215,4 @@ export abstract class Gen7RomHandler extends Abstract3DSRomHandler {
   }
 }
 
-export { RomEntry as Gen7RomEntry, RomFileEntry as Gen7RomFileEntry };
+export type { RomEntry as Gen7RomEntry, RomFileEntry as Gen7RomFileEntry };

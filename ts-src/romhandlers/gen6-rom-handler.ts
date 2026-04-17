@@ -988,4 +988,4 @@ export abstract class Gen6RomHandler extends Abstract3DSRomHandler {
   }
 }
 
-export { RomEntry as Gen6RomEntry, RomFileEntry as Gen6RomFileEntry };
+export type { RomEntry as Gen6RomEntry, RomFileEntry as Gen6RomFileEntry };

@@ -1,0 +1,177 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Part of "randomize.sh" (https://github.com/justinelijahtaylor/randomizer)
+// A web fork of Universal Pokemon Randomizer ZX. Licensed under GPLv3-or-later.
+// See LICENSE.txt for the full license text.
+
+import Link from "next/link";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+export const metadata = {
+  title: "About — randomize.sh",
+};
+
+export default function AboutPage() {
+  return (
+    <main className="mx-auto w-full max-w-3xl p-4 sm:p-8 space-y-6">
+      <header className="space-y-2">
+        <h1 className="text-3xl font-bold tracking-tight">About</h1>
+        <p className="text-sm text-muted-foreground">
+          An in-browser fork of{" "}
+          <a
+            href="https://github.com/Ajarmar/universal-pokemon-randomizer-zx"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline"
+          >
+            Universal Pokemon Randomizer ZX
+          </a>
+          .
+        </p>
+      </header>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>What is this?</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-foreground/80 leading-relaxed">
+          <p>
+            <span className="text-primary font-semibold">randomize.sh</span> is a
+            web front-end for the Universal Pokemon Randomizer ZX. The original
+            project is a Java application that shuffles virtually every aspect of
+            a Pokemon ROM — wild encounters, trainer teams, starters, moves,
+            items, evolutions, and much more.
+          </p>
+          <p>
+            This fork ports the Java engine to TypeScript and runs it entirely
+            in your browser via a Web Worker. Your ROM never leaves your device.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Supported games</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-1 text-sm text-foreground/80 leading-relaxed">
+          <p>
+            <span className="text-primary">Gen 1</span> — Red, Blue, Yellow
+          </p>
+          <p>
+            <span className="text-primary">Gen 2</span> — Gold, Silver, Crystal
+          </p>
+          <p>
+            <span className="text-primary">Gen 3</span> — Ruby, Sapphire, Emerald,
+            FireRed, LeafGreen
+          </p>
+          <p>
+            <span className="text-primary">Gen 4</span> — Diamond, Pearl,
+            Platinum, HeartGold, SoulSilver
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Privacy</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-foreground/80 leading-relaxed">
+          Everything runs in your browser. Your ROM bytes are read into memory,
+          passed to a Web Worker, randomized there, and returned as a download.
+          No server, no uploads, no telemetry.
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>License &amp; source</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-foreground/80 leading-relaxed space-y-2">
+          <p>
+            This project is licensed under the{" "}
+            <a
+              href="https://www.gnu.org/licenses/gpl-3.0.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              GNU General Public License v3.0 (or later)
+            </a>
+            , inherited from the upstream Universal Pokemon Randomizer ZX.
+          </p>
+          <p>
+            This is a <span className="text-primary">modified version</span> —
+            the Java engine has been ported to TypeScript and wrapped in a
+            browser UI. Full source, commit history, and the{" "}
+            <a
+              href="https://github.com/justinelijahtaylor/randomizer/blob/main/LICENSE.txt"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              complete license text
+            </a>{" "}
+            are available in the{" "}
+            <a
+              href="https://github.com/justinelijahtaylor/randomizer"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              fork repository
+            </a>
+            .
+          </p>
+          <p>
+            Per GPLv3 §5(a): this work differs from the upstream Universal
+            Pokemon Randomizer ZX and is distributed by a different author.
+            See the git log for changes.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Credits</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-foreground/80 leading-relaxed space-y-2">
+          <p>
+            TypeScript port and web front-end by{" "}
+            <a
+              href="https://github.com/justinelijahtaylor"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              @justinelijahtaylor
+            </a>
+            .
+          </p>
+          <p>
+            The underlying randomization logic is from{" "}
+            <a
+              href="https://github.com/Ajarmar/universal-pokemon-randomizer-zx"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              Universal Pokemon Randomizer ZX
+            </a>{" "}
+            by Ajarmar and many contributors, which itself extends Dabomstew's
+            original Universal Pokemon Randomizer.
+          </p>
+          <p>
+            Pokemon and related names/likenesses are trademark & © Nintendo
+            1996–present. This project is not affiliated with or endorsed by
+            Nintendo, Game Freak, or The Pokemon Company.
+          </p>
+        </CardContent>
+      </Card>
+
+      <div className="pt-2">
+        <Link href="/" className="text-sm text-primary hover:underline">
+          ← Back to the randomizer
+        </Link>
+      </div>
+    </main>
+  );
+}
