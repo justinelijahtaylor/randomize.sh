@@ -89,7 +89,7 @@ export default function AboutPage() {
               rel="noopener noreferrer"
               className="text-primary hover:underline"
             >
-              Justin Elijah Taylor
+              @justinelijahtaylor
             </a>
             .
           </p>
