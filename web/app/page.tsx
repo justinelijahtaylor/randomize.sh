@@ -25,56 +25,82 @@ export default function Home() {
   const [result, setResult] = useState<{ url: string; filename: string; logUrl: string } | null>(null);
 
   const methods = useForm<Record<string, unknown>>({ defaultValues: DEFAULT_VALUES });
-  const { watch, reset } = methods;
+  const { watch, reset, getValues } = methods;
 
-  // Reflect form changes into the settings string (form -> string)
-  const ignoreNextFormChange = useRef(false);
-  const ignoreNextStringChange = useRef(false);
-  const formValues = watch();
+  // We need to break a feedback loop between two sync paths:
+  //   form -> string  (user edits a field)
+  //   string -> form  (user pastes a settings string)
+  // Without a lock, reset(vals) from the string->form path would trigger the
+  // form watcher, which would re-serialize the values and overwrite what the
+  // user just pasted. `syncLock` is released on the next microtask so it
+  // covers the synchronous reset + its downstream watch callbacks.
+  const syncLock = useRef<"none" | "string-to-form" | "form-to-string">("none");
 
+  // form -> string (subscription API only fires on actual value changes, NOT
+  // on every render, which was the previous bug).
   useEffect(() => {
-    if (ignoreNextFormChange.current) {
-      ignoreNextFormChange.current = false;
-      return;
-    }
-    // Debounce & compute on a microtask
-    let cancelled = false;
-    (async () => {
+    const sub = watch((value, info) => {
+      if (syncLock.current === "string-to-form") return;
+      // info.type is 'change' for user edits, undefined for reset()
+      if (info?.type !== "change") return;
+      syncLock.current = "form-to-string";
       try {
-        const { formValuesToSettingsString } = await import("@/lib/settings-sync");
-        const str = formValuesToSettingsString(formValues);
-        if (cancelled) return;
-        ignoreNextStringChange.current = true;
-        setSettingsString(str);
+        // Lazy import because settings-sync pulls in ts-src (which uses
+        // Buffer globals set up in the worker / browser-globals module)
+        import("@/lib/settings-sync").then(({ formValuesToSettingsString }) => {
+          try {
+            setSettingsString(formValuesToSettingsString(value as Record<string, unknown>));
+          } catch {
+            /* incomplete form state, ignore */
+          } finally {
+            queueMicrotask(() => {
+              if (syncLock.current === "form-to-string") syncLock.current = "none";
+            });
+          }
+        });
       } catch {
-        /* ignore, likely incomplete values */
+        syncLock.current = "none";
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [formValues]);
+    });
+    return () => sub.unsubscribe();
+  }, [watch]);
 
-  // Reflect settings string changes into the form (string -> form)
+  // string -> form
   const onSettingsStringChange = useCallback(
     async (str: string) => {
+      // Always reflect the pasted/typed text in the input, even if we can't
+      // (yet) parse it.
       setSettingsString(str);
-      if (ignoreNextStringChange.current) {
-        ignoreNextStringChange.current = false;
-        return;
-      }
+      if (syncLock.current === "form-to-string") return;
       if (!str.trim()) return;
       try {
         const { settingsStringToFormValues } = await import("@/lib/settings-sync");
         const vals = settingsStringToFormValues(str);
-        ignoreNextFormChange.current = true;
+        syncLock.current = "string-to-form";
         reset(vals);
+        queueMicrotask(() => {
+          if (syncLock.current === "string-to-form") syncLock.current = "none";
+        });
       } catch {
-        /* invalid settings string, ignore */
+        /* invalid or incomplete string, leave the form as-is */
       }
     },
     [reset],
   );
+
+  // One-shot on mount: render the initial (default) settings string so the
+  // user has something to compare against.
+  useEffect(() => {
+    (async () => {
+      try {
+        const { formValuesToSettingsString } = await import("@/lib/settings-sync");
+        setSettingsString(formValuesToSettingsString(getValues()));
+      } catch {
+        /* ignore */
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Spin up the worker once on mount
   useEffect(() => {
