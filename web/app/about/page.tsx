@@ -82,6 +82,18 @@ export default function AboutPage() {
         </CardHeader>
         <CardContent className="text-sm text-foreground/80 leading-relaxed space-y-2">
           <p>
+            TypeScript port and web front-end by{" "}
+            <a
+              href="https://github.com/justinelijahtaylor"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              Justin Elijah Taylor
+            </a>
+            .
+          </p>
+          <p>
             The underlying randomization logic is from{" "}
             <a
               href="https://github.com/Ajarmar/universal-pokemon-randomizer-zx"
