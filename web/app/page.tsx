@@ -172,7 +172,7 @@ export default function Home() {
     <main className="mx-auto w-full max-w-5xl p-4 sm:p-8 space-y-6">
       <header className="space-y-2">
         <h1 className="text-3xl font-bold tracking-tight">
-          Universal Pokemon Randomizer ZX
+          randomize.sh
         </h1>
         <p className="text-muted-foreground">
           Randomize your Pokemon ROMs entirely in your browser. Your ROM never

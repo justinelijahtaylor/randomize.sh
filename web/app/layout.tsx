@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Universal Pokemon Randomizer ZX (Web)",
+  title: "randomize.sh",
   description:
     "Randomize your Pokemon ROMs entirely in the browser. Your ROM never leaves your device.",
 };
