@@ -308,7 +308,18 @@ export abstract class AbstractDSRomHandler extends AbstractRomHandler {
   protected extendARM9(arm9: Uint8Array, extendBy: number, prefix: string, arm9Offset: number): Uint8Array {
     if (this.arm9Extended) return arm9;
 
-    const tcmCopyingPointersOffset = this.findInData(arm9, prefix) + prefix.length / 2;
+    const prefixOffset = this.findInData(arm9, prefix);
+    if (prefixOffset < 0) {
+      // -1 = not found (most likely: ARM9 was never decompressed, or an
+      //      earlier IPS patch mangled the prefix).
+      // -2 = non-unique match.
+      throw new Error(
+        `extendARM9: TCMCopyingPrefix ${prefixOffset === -1 ? "not found" : "matched multiple times"} ` +
+        `in ARM9 (len=${arm9.length}). The ARM9 may not have been decompressed on load, or an ` +
+        `earlier IPS patch has corrupted the expected byte signature.`,
+      );
+    }
+    const tcmCopyingPointersOffset = prefixOffset + prefix.length / 2;
 
     const oldDestPointersOffset = FileFunctions.readFullInt(arm9, tcmCopyingPointersOffset) - arm9Offset;
     const itcmSrcOffset = FileFunctions.readFullInt(arm9, tcmCopyingPointersOffset + 8) - arm9Offset;
