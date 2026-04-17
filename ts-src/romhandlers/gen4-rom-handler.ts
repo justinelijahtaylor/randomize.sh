@@ -3965,7 +3965,15 @@ export class Gen4RomHandler extends AbstractDSRomHandler {
     for (let i = 0; i < this.romEntry.staticPokemon.length; i++) {
       const statP = this.romEntry.staticPokemon[i];
       const se = new StaticEncounter();
-      let newPK = this.pokes[readWord(sN.files[statP.speciesEntries[0].file], statP.speciesEntries[0].offset)]!;
+      const spEntry = statP.speciesEntries[0];
+      const speciesId = readWord(sN.files[spEntry.file], spEntry.offset);
+      let newPK = this.pokes[speciesId];
+      if (newPK == null) {
+        throw new Error(
+          `Static Pokemon #${i}: script file ${spEntry.file} @0x${spEntry.offset.toString(16)} ` +
+          `returned species ${speciesId}, but this.pokes[${speciesId}] is null.`,
+        );
+      }
       const forme = statP.formeEntries.length > 0 ? sN.files[statP.formeEntries[0].file][statP.formeEntries[0].offset] : 0;
       newPK = this.getAltFormeOfPokemon(newPK, forme);
       se.pkmn = newPK;
@@ -3985,14 +3993,35 @@ export class Gen4RomHandler extends AbstractDSRomHandler {
       const sc = this.romEntry.arrayEntries.get('StaticPokemonTradeScripts')!;
       const so = this.romEntry.arrayEntries.get('StaticPokemonTradeLevelOffsets')!;
       for (let i = 0; i < tr.length; i++) {
-        const se = new StaticEncounter(this.pokes[this.readLong(tNARC.files[tr[i]], 0)]!);
+        const speciesId = this.readLong(tNARC.files[tr[i]], 0);
+        const pk = this.pokes[speciesId];
+        if (pk == null) {
+          throw new Error(
+            `Static Pokemon (trade #${i}): trade NARC entry ${tr[i]} returned ` +
+            `species ${speciesId}, but this.pokes[${speciesId}] is null.`,
+          );
+        }
+        const se = new StaticEncounter(pk);
         se.level = sN.files[sc[i]][so[i]];
         sp.push(se);
       }
     }
     if (romEntryGetInt(this.romEntry, 'MysteryEggOffset') > 0) {
       const ov = this.readOverlay(romEntryGetInt(this.romEntry, 'FieldOvlNumber'));
-      if (ov) { const se = new StaticEncounter(this.pokes[ov[romEntryGetInt(this.romEntry, 'MysteryEggOffset')] & 0xFF]!); se.isEgg = true; sp.push(se); }
+      if (ov) {
+        const mysteryEggOffset = romEntryGetInt(this.romEntry, 'MysteryEggOffset');
+        const speciesId = ov[mysteryEggOffset] & 0xFF;
+        const pk = this.pokes[speciesId];
+        if (pk == null) {
+          throw new Error(
+            `Static Pokemon (mystery egg): FieldOvl @0x${mysteryEggOffset.toString(16)} ` +
+            `returned species ${speciesId}, but this.pokes[${speciesId}] is null.`,
+          );
+        }
+        const se = new StaticEncounter(pk);
+        se.isEgg = true;
+        sp.push(se);
+      }
     }
     if (romEntryGetInt(this.romEntry, 'FossilTableOffset') > 0) {
       let ftD: Uint8Array = this.arm9;
@@ -4000,7 +4029,20 @@ export class Gen4RomHandler extends AbstractDSRomHandler {
       const fls = sN.files[romEntryGetInt(this.romEntry, 'FossilLevelScriptNumber')];
       const lv = fls[romEntryGetInt(this.romEntry, 'FossilLevelOffset')];
       if (this.romEntry.romType === Gen4Constants.Type_HGSS) { const ov = this.readOverlay(romEntryGetInt(this.romEntry, 'FossilTableOvlNumber')); if (ov) ftD = ov; }
-      for (let f = 0; f < Gen4Constants.fossilCount; f++) { const se = new StaticEncounter(this.pokes[readWord(ftD, bo + 2 + f * 4)]!); se.level = lv; sp.push(se); }
+      for (let f = 0; f < Gen4Constants.fossilCount; f++) {
+        const offset = bo + 2 + f * 4;
+        const speciesId = readWord(ftD, offset);
+        const pk = this.pokes[speciesId];
+        if (pk == null) {
+          throw new Error(
+            `Static Pokemon (fossil #${f}): @0x${offset.toString(16)} returned species ` +
+            `${speciesId}, but this.pokes[${speciesId}] is null. (ftD len=${ftD.length})`,
+          );
+        }
+        const se = new StaticEncounter(pk);
+        se.level = lv;
+        sp.push(se);
+      }
     }
     if (this.roamerRandomizationEnabled) { this.getRoamersHelper(sp); }
     return sp;
