@@ -45,6 +45,31 @@ export default function AboutPage() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Why web?</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-foreground/80 leading-relaxed">
+          <p>
+            The original randomizer is a desktop Java app — great if you&apos;re
+            at your computer, awkward if you&apos;re not. A lot of Pokemon is
+            played on the go these days: phones running Delta, GBA4iOS, or
+            DraStic, handheld retro devices like the Miyoo Mini, Anbernic, or
+            Retroid, and the Steam Deck.
+          </p>
+          <p>
+            Running the randomizer in the browser means you can drop in a ROM,
+            tweak a few options, and download a fresh seed directly on whatever
+            device you&apos;re playing on — without shuttling files back to a
+            laptop and re-transferring them to your handheld each time.
+          </p>
+          <p>
+            Same engine, same settings strings, same output. Just accessible
+            from anywhere with a browser.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Supported games</CardTitle>
         </CardHeader>
         <CardContent className="space-y-1 text-sm text-foreground/80 leading-relaxed">
