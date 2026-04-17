@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Part of "randomize.sh" (https://github.com/justinelijahtaylor/randomizer)
+// A web fork of Universal Pokemon Randomizer ZX. Licensed under GPLv3-or-later.
+// See LICENSE.txt for the full license text.
+
 /**
  * Bootstrap: fetch bundled config files and register them in the virtual FS
  * before any ts-src code runs. Called from the Web Worker.

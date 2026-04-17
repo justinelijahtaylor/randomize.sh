@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Part of "randomize.sh" (https://github.com/justinelijahtaylor/randomizer)
+// A web fork of Universal Pokemon Randomizer ZX. Licensed under GPLv3-or-later.
+// See LICENSE.txt for the full license text.
+
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -45,31 +50,6 @@ export default function AboutPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Why web?</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm text-foreground/80 leading-relaxed">
-          <p>
-            The original randomizer is a desktop Java app — great if you&apos;re
-            at your computer, awkward if you&apos;re not. A lot of Pokemon is
-            played on the go these days: phones running Delta, GBA4iOS, or
-            DraStic, handheld retro devices like the Miyoo Mini, Anbernic, or
-            Retroid, and the Steam Deck.
-          </p>
-          <p>
-            Running the randomizer in the browser means you can drop in a ROM,
-            tweak a few options, and download a fresh seed directly on whatever
-            device you&apos;re playing on — without shuttling files back to a
-            laptop and re-transferring them to your handheld each time.
-          </p>
-          <p>
-            Same engine, same settings strings, same output. Just accessible
-            from anywhere with a browser.
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
           <CardTitle>Supported games</CardTitle>
         </CardHeader>
         <CardContent className="space-y-1 text-sm text-foreground/80 leading-relaxed">
@@ -98,6 +78,54 @@ export default function AboutPage() {
           Everything runs in your browser. Your ROM bytes are read into memory,
           passed to a Web Worker, randomized there, and returned as a download.
           No server, no uploads, no telemetry.
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>License &amp; source</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-foreground/80 leading-relaxed space-y-2">
+          <p>
+            This project is licensed under the{" "}
+            <a
+              href="https://www.gnu.org/licenses/gpl-3.0.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              GNU General Public License v3.0 (or later)
+            </a>
+            , inherited from the upstream Universal Pokemon Randomizer ZX.
+          </p>
+          <p>
+            This is a <span className="text-primary">modified version</span> —
+            the Java engine has been ported to TypeScript and wrapped in a
+            browser UI. Full source, commit history, and the{" "}
+            <a
+              href="https://github.com/justinelijahtaylor/randomizer/blob/main/LICENSE.txt"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              complete license text
+            </a>{" "}
+            are available in the{" "}
+            <a
+              href="https://github.com/justinelijahtaylor/randomizer"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              fork repository
+            </a>
+            .
+          </p>
+          <p>
+            Per GPLv3 §5(a): this work differs from the upstream Universal
+            Pokemon Randomizer ZX and is distributed by a different author.
+            See the git log for changes.
+          </p>
         </CardContent>
       </Card>
 

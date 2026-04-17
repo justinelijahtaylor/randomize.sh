@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Part of "randomize.sh" (https://github.com/justinelijahtaylor/randomizer)
+// A web fork of Universal Pokemon Randomizer ZX. Licensed under GPLv3-or-later.
+// See LICENSE.txt for the full license text.
+
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -32,13 +37,22 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <Nav />
         <div className="flex-1">{children}</div>
-        <footer className="mx-auto w-full max-w-5xl px-4 sm:px-8 py-4 flex justify-end">
+        <footer className="mx-auto w-full max-w-5xl px-4 sm:px-8 py-4 flex justify-between items-center gap-4 text-[10px] text-foreground/40 select-none">
+          <a
+            href="https://github.com/justinelijahtaylor/randomizer"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Source code on GitHub (GPLv3)"
+            className="hover:text-primary transition-colors"
+          >
+            Source (GPLv3)
+          </a>
           <a
             href="https://github.com/justinelijahtaylor"
             target="_blank"
             rel="noopener noreferrer"
             aria-label="justinelijahtaylor on GitHub"
-            className="text-[10px] text-foreground/40 hover:text-primary transition-colors select-none"
+            className="hover:text-primary transition-colors"
           >
             justinelijahtaylor
           </a>
