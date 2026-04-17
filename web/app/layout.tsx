@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "randomize.sh",
+  title: "randomize.sh by justinelijahtaylor",
   description:
     "Randomize your Pokemon ROMs entirely in the browser. Your ROM never leaves your device.",
 };

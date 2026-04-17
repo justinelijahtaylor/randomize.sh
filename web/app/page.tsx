@@ -172,7 +172,16 @@ export default function Home() {
     <main className="mx-auto w-full max-w-5xl p-4 sm:p-8 space-y-6">
       <header className="space-y-2">
         <h1 className="text-3xl font-bold tracking-tight">
-          randomize.sh
+          randomize.sh{" "}
+          <span className="text-muted-foreground font-normal text-2xl">by</span>{" "}
+          <a
+            href="https://github.com/justinelijahtaylor"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline"
+          >
+            justinelijahtaylor
+          </a>
         </h1>
         <p className="text-sm text-muted-foreground">
           Forked from{" "}
