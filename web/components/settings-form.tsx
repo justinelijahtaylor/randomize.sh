@@ -4,7 +4,6 @@ import * as React from "react";
 import { useMemo } from "react";
 import { Controller, useFormContext } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -211,7 +210,7 @@ function GroupRenderer({ group, gen }: { group: FieldGroup; gen: number }) {
   );
 }
 
-function TabRenderer({ tab, gen }: { tab: Tab; gen: number }) {
+function SectionRenderer({ tab, gen }: { tab: Tab; gen: number }) {
   const visibleGroups = tab.groups.filter((g) => {
     if (g.minGen && gen < g.minGen) return false;
     if (g.maxGen && gen > g.maxGen) return false;
@@ -222,23 +221,24 @@ function TabRenderer({ tab, gen }: { tab: Tab; gen: number }) {
     });
   });
 
-  if (visibleGroups.length === 0) {
-    return (
-      <div className="text-sm text-muted-foreground py-8 text-center">
-        No applicable options for Gen {gen} on this tab.
-      </div>
-    );
-  }
+  if (visibleGroups.length === 0) return null;
 
   return (
-    <div className="space-y-6">
-      {visibleGroups.map((g, i) => (
-        <React.Fragment key={g.title}>
-          {i > 0 && <Separator />}
-          <GroupRenderer group={g} gen={gen} />
-        </React.Fragment>
-      ))}
-    </div>
+    <Card id={`section-${tab.id}`} className="scroll-mt-6">
+      <CardHeader>
+        <CardTitle className="text-primary">{tab.label}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-6">
+          {visibleGroups.map((g, i) => (
+            <React.Fragment key={g.title}>
+              {i > 0 && <Separator />}
+              <GroupRenderer group={g} gen={gen} />
+            </React.Fragment>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -247,35 +247,47 @@ export function SettingsForm({ generation }: Props) {
     return FORM_TABS.filter((t) => {
       if (t.minGen && generation < t.minGen) return false;
       if (t.maxGen && generation > t.maxGen) return false;
-      return true;
+      const hasGroups = t.groups.some((g) => {
+        if (g.minGen && generation < g.minGen) return false;
+        if (g.maxGen && generation > g.maxGen) return false;
+        return g.fields.some((f) => {
+          if (f.minGen && generation < f.minGen) return false;
+          if (f.maxGen && generation > f.maxGen) return false;
+          return true;
+        });
+      });
+      return hasGroups;
     });
   }, [generation]);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Randomization Options</CardTitle>
-        <CardDescription>
-          Editing any option updates the settings string above so you can copy and
-          share it. Only options applicable to Gen {generation} are shown.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Tabs defaultValue={visibleTabs[0]?.id}>
-          <TabsList className="flex w-full flex-wrap h-auto">
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Randomization Options</CardTitle>
+          <CardDescription>
+            Editing any option updates the settings string above so you can copy
+            and share it. Jump to a section:
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <nav className="flex flex-wrap gap-2 text-xs">
             {visibleTabs.map((t) => (
-              <TabsTrigger key={t.id} value={t.id} className="text-xs">
+              <a
+                key={t.id}
+                href={`#section-${t.id}`}
+                className="rounded-md border border-border px-2.5 py-1 text-foreground/80 hover:border-primary hover:text-primary transition-colors"
+              >
                 {t.label}
-              </TabsTrigger>
+              </a>
             ))}
-          </TabsList>
-          {visibleTabs.map((t) => (
-            <TabsContent key={t.id} value={t.id} className="pt-4">
-              <TabRenderer tab={t} gen={generation} />
-            </TabsContent>
-          ))}
-        </Tabs>
-      </CardContent>
-    </Card>
+          </nav>
+        </CardContent>
+      </Card>
+
+      {visibleTabs.map((t) => (
+        <SectionRenderer key={t.id} tab={t} gen={generation} />
+      ))}
+    </div>
   );
 }
