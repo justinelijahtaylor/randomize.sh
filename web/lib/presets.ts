@@ -64,7 +64,15 @@ export const PRESETS: Preset[] = [
     settingsString:
       "321WRIEEjIBAAQABwCRAAKeBhsECQEAFAACCQAuEgAAAAAABRi45ATkAYYICTIGBAIyAAUYEEZpcmUgUmVkIChVKSAxLjF0u1o648M4ig",
   },
-  // ---- Gen 4 presets will go here. ----
+  // ---- Gen 4 (Diamond / Pearl / Platinum, HeartGold / SoulSilver) ----
+  {
+    id: "gen4-kaizo-hgss",
+    name: "Kaizo",
+    gen: 4,
+    romNames: ["HeartGold", "SoulSilver"],
+    settingsString:
+      "321WRIEEgKYAJsAngCRAAKeBhsECQEAFAACCQAuEgAAAAAADBCI5ATkQYYICTIGBQIyAAUYFlBva2Vtb24gU291bFNpbHZlciAoVSnJuKMx48M4ig==",
+  },
 ];
 
 /** Presets applicable to a given ROM (by generation + optional name match). */
