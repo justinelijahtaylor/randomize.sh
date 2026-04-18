@@ -6,49 +6,42 @@
 "use client";
 
 import * as React from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { presetsForRom } from "@/lib/presets";
 
 interface Props {
   generation: number;
   romName: string | null;
-  onApply: (settingsString: string) => void;
+  /** ID of the currently-applied preset, if any. */
+  appliedPresetId: string | null;
+  onApply: (presetId: string, settingsString: string) => void;
 }
 
-export function Presets({ generation, romName, onApply }: Props) {
+/**
+ * Inline preset picker — renders as a row of buttons, meant to sit inside
+ * the Settings string card. The active preset (if any) is highlighted.
+ */
+export function PresetPicker({ generation, romName, appliedPresetId, onApply }: Props) {
   const applicable = presetsForRom(generation, romName);
-
   if (applicable.length === 0) return null;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Presets</CardTitle>
-        <CardDescription>
-          Popular settings configurations for Gen {generation}
-          {romName ? ` / ${romName}` : ""}. Clicking a preset overwrites every
-          form option — you can still tweak individual fields afterward.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="flex flex-wrap gap-2">
-          {applicable.map((p) => (
-            <Button
-              key={p.id}
-              variant="outline"
-              size="sm"
-              onClick={() => onApply(p.settingsString)}
-            >
-              {p.name}
-            </Button>
-          ))}
-          <Badge variant="outline" className="h-auto py-1 px-2 self-center">
-            {applicable.length} preset{applicable.length === 1 ? "" : "s"}
-          </Badge>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs text-muted-foreground mr-1">Presets:</span>
+      {applicable.map((p) => {
+        const active = appliedPresetId === p.id;
+        return (
+          <Button
+            key={p.id}
+            type="button"
+            variant={active ? "default" : "outline"}
+            size="sm"
+            onClick={() => onApply(p.id, p.settingsString)}
+          >
+            {p.name}
+          </Button>
+        );
+      })}
+    </div>
   );
 }
