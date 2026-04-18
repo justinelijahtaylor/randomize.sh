@@ -39,16 +39,9 @@ export function Presets({ generation, romName, onApply }: Props) {
               key={p.id}
               variant="outline"
               size="sm"
-              title={p.description}
               onClick={() => onApply(p.settingsString)}
-              className="flex flex-col items-start h-auto py-2 px-3 gap-0.5"
             >
-              <span className="font-medium">{p.name}</span>
-              {p.description && (
-                <span className="text-xs text-muted-foreground font-normal">
-                  {p.description}
-                </span>
-              )}
+              {p.name}
             </Button>
           ))}
           <Badge variant="outline" className="h-auto py-1 px-2 self-center">

@@ -18,7 +18,6 @@
 export interface Preset {
   id: string;
   name: string;
-  description?: string;
   /** Generation this preset is designed for (1-4 today). */
   gen: 1 | 2 | 3 | 4;
   /**
