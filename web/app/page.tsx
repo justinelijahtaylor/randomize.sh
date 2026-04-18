@@ -30,11 +30,18 @@ export default function Home() {
   const [progress, setProgress] = useState<ProgressState>(INITIAL_PROGRESS);
   const [result, setResult] = useState<{ url: string; filename: string; logUrl: string } | null>(null);
   /**
-   * ID of the preset currently applied. While non-null, the full options
-   * form is hidden — the user has committed to a preset and just wants to
-   * randomize. Cleared when the user manually edits the settings string.
+   * Which button in the preset row should appear selected:
+   *   - "default" when the form is on neutral defaults
+   *   - a preset id when that preset is active (options form is hidden)
+   *   - "custom" when the user has diverged from both (manual edit)
+   *
+   * On mount we consider the form to be on defaults (Default highlighted).
    */
-  const [appliedPresetId, setAppliedPresetId] = useState<string | null>(null);
+  const [activeSelection, setActiveSelection] = useState<string>("default");
+  const appliedPresetId =
+    activeSelection === "default" || activeSelection === "custom"
+      ? null
+      : activeSelection;
 
   const methods = useForm<Record<string, unknown>>({ defaultValues: DEFAULT_VALUES });
   const { watch, reset, getValues } = methods;
@@ -55,6 +62,9 @@ export default function Home() {
       if (syncLock.current === "string-to-form") return;
       // info.type is 'change' for user edits, undefined for reset()
       if (info?.type !== "change") return;
+      // User edited a field — they're now in custom territory, not on the
+      // default baseline (or any named preset, though those hide the form).
+      setActiveSelection("custom");
       syncLock.current = "form-to-string";
       try {
         // Lazy import because settings-sync pulls in ts-src (which uses
@@ -78,13 +88,12 @@ export default function Home() {
   }, [watch]);
 
   // string -> form.
-  // `fromPreset`: true when the change came from clicking a preset button,
-  // false (default) when the user edited the settings input manually. Manual
-  // edits clear the applied-preset state so the form reappears.
+  // The optional `selection` arg sets which preset row button should appear
+  // highlighted after the change applies. Manual edits pass "custom".
   const applySettingsString = useCallback(
-    async (str: string, fromPreset = false) => {
+    async (str: string, selection: string = "custom") => {
       setSettingsString(str);
-      if (!fromPreset) setAppliedPresetId(null);
+      setActiveSelection(selection);
       if (syncLock.current === "form-to-string") return;
       if (!str.trim()) return;
       try {
@@ -103,25 +112,24 @@ export default function Home() {
   );
 
   const onSettingsStringChange = useCallback(
-    (str: string) => applySettingsString(str, false),
+    (str: string) => applySettingsString(str, "custom"),
     [applySettingsString],
   );
 
   const onApplyPreset = useCallback(
     (presetId: string, str: string) => {
-      setAppliedPresetId(presetId);
-      applySettingsString(str, true);
+      applySettingsString(str, presetId);
     },
     [applySettingsString],
   );
 
   /**
-   * "Default" preset: clear any applied preset, reset the form to neutral
-   * defaults, and refresh the settings-string box to match. Leaves the form
-   * visible so the user can tweak from a clean baseline.
+   * "Default" button: reset the form to neutral defaults, refresh the
+   * settings-string box to match, and flag the Default button as active.
+   * Leaves the form visible so the user can tweak from a clean baseline.
    */
   const onResetToDefault = useCallback(async () => {
-    setAppliedPresetId(null);
+    setActiveSelection("default");
     syncLock.current = "string-to-form";
     reset(DEFAULT_VALUES);
     queueMicrotask(() => {
@@ -288,7 +296,7 @@ export default function Home() {
             <PresetPicker
               generation={loadedRom.detect.generation}
               romName={loadedRom.detect.romName}
-              appliedPresetId={appliedPresetId}
+              activeSelection={activeSelection}
               onApply={onApplyPreset}
               onReset={onResetToDefault}
             />

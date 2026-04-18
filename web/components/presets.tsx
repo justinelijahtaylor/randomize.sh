@@ -12,8 +12,13 @@ import { presetsForRom } from "@/lib/presets";
 interface Props {
   generation: number;
   romName: string | null;
-  /** ID of the currently-applied preset, if any. */
-  appliedPresetId: string | null;
+  /**
+   * Which preset-row entry should appear highlighted:
+   *   - "default" → the Default button is highlighted
+   *   - "custom"  → nothing is highlighted (user has a custom config)
+   *   - any other string → preset with that id is highlighted
+   */
+  activeSelection: string;
   onApply: (presetId: string, settingsString: string) => void;
   /**
    * Reset every setting back to the randomizer's neutral defaults and keep
@@ -25,9 +30,9 @@ interface Props {
 
 /**
  * Inline preset picker — renders as a row of buttons, meant to sit inside
- * the Settings string card. The active preset (if any) is highlighted.
+ * the Settings string card. The currently-active choice is highlighted.
  */
-export function PresetPicker({ generation, romName, appliedPresetId, onApply, onReset }: Props) {
+export function PresetPicker({ generation, romName, activeSelection, onApply, onReset }: Props) {
   const applicable = presetsForRom(generation, romName);
 
   return (
@@ -35,14 +40,14 @@ export function PresetPicker({ generation, romName, appliedPresetId, onApply, on
       <span className="text-xs text-muted-foreground mr-1">Presets:</span>
       <Button
         type="button"
-        variant={appliedPresetId === null ? "default" : "outline"}
+        variant={activeSelection === "default" ? "default" : "outline"}
         size="sm"
         onClick={onReset}
       >
         Default
       </Button>
       {applicable.map((p) => {
-        const active = appliedPresetId === p.id;
+        const active = activeSelection === p.id;
         return (
           <Button
             key={p.id}
