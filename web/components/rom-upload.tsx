@@ -95,7 +95,15 @@ export function RomUpload({ client, onRomLoaded, loadedRom }: Props) {
               id="rom-input"
               type="file"
               className="sr-only"
-              accept=".gb,.gbc,.sgb,.gba,.nds"
+              // Note: intentionally broad. Android's system file picker
+              // (used by Chrome / webview-based browsers on handhelds like
+              // the AYN Thor, Odin, Retroid, and phones in general) filters
+              // aggressively by MIME type. `.gb` / `.gbc` / `.gba` / `.nds`
+              // have no registered MIME type, so a restrictive `accept` list
+              // makes every ROM appear un-pickable. We let the user pick any
+              // file and the worker's `isLoadable` check rejects non-ROMs
+              // with a clear error.
+              accept="*/*,.gb,.gbc,.sgb,.gba,.nds,application/octet-stream"
               onChange={onInputChange}
               disabled={isLoading}
             />
