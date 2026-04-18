@@ -16,6 +16,7 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { RomUpload, type LoadedRom } from "@/components/rom-upload";
 import { ProgressPanel, INITIAL_PROGRESS, type ProgressState } from "@/components/progress-panel";
 import { SettingsForm } from "@/components/settings-form";
+import { Presets } from "@/components/presets";
 import { DEFAULT_VALUES } from "@/lib/form-schema";
 import type { RandomizerClient } from "@/lib/worker/client";
 
@@ -253,6 +254,14 @@ export default function Home() {
             />
           </CardContent>
         </Card>
+      )}
+
+      {loadedRom && (
+        <Presets
+          generation={loadedRom.detect.generation}
+          romName={loadedRom.detect.romName}
+          onApply={onSettingsStringChange}
+        />
       )}
 
       {loadedRom && (
