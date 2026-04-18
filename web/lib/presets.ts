@@ -66,6 +66,14 @@ export const PRESETS: Preset[] = [
   },
   // ---- Gen 4 (Diamond / Pearl / Platinum, HeartGold / SoulSilver) ----
   {
+    id: "gen4-kaizo-dppt",
+    name: "Kaizo",
+    gen: 4,
+    romNames: ["Diamond", "Pearl", "Platinum"],
+    settingsString:
+      "321WRIEEjLDAXQA+ACRAAKeBhsECQEAFAACCQAuEgAAAAAADBCI5ATkQYYICTIGBQIyAAUYGlBva2Vtb24gUGxhdGludW0gKFUgUmV2IDEpJe8DjOPDOIo=",
+  },
+  {
     id: "gen4-kaizo-hgss",
     name: "Kaizo",
     gen: 4,
