@@ -39,7 +39,14 @@ export const PRESETS: Preset[] = [
     settingsString:
       "321WRIEAQIZAIUAAACRAAKeBgMECQEAFAABCQAOAgAAAAAAAAho5ATkAQAICTIGBQMyAAIYElBva2Vtb24gWWVsbG93IChVKVXr5SHjwziK",
   },
-  // ---- Gen 2 presets will go here. ----
+  // ---- Gen 2 (Gold / Silver / Crystal) ----
+  {
+    id: "gen2-kaizo",
+    name: "Kaizo",
+    gen: 2,
+    settingsString:
+      "321WRIEATIZAIUAAACRAAKeBhsESQEAFAAKCQAuAgAAAAAAABgI5ATkAQAICTIGBQMyAAIYF1Bva2Vtb24gQ3J5c3RhbCAoVSAxLjEpS6ygxePDOIo",
+  },
   // ---- Gen 3 presets will go here. ----
   // ---- Gen 4 presets will go here. ----
 ];
