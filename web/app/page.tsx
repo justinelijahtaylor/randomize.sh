@@ -16,6 +16,7 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { RomUpload, type LoadedRom } from "@/components/rom-upload";
 import { ProgressPanel, INITIAL_PROGRESS, type ProgressState } from "@/components/progress-panel";
 import { SettingsForm } from "@/components/settings-form";
+import { PresetPicker } from "@/components/presets";
 import { DEFAULT_VALUES } from "@/lib/form-schema";
 import type { RandomizerClient } from "@/lib/worker/client";
 
@@ -28,6 +29,19 @@ export default function Home() {
   const [isRunning, setIsRunning] = useState(false);
   const [progress, setProgress] = useState<ProgressState>(INITIAL_PROGRESS);
   const [result, setResult] = useState<{ url: string; filename: string; logUrl: string } | null>(null);
+  /**
+   * Which button in the preset row should appear selected:
+   *   - "default" when the form is on neutral defaults
+   *   - a preset id when that preset is active (options form is hidden)
+   *   - "custom" when the user has diverged from both (manual edit)
+   *
+   * On mount we consider the form to be on defaults (Default highlighted).
+   */
+  const [activeSelection, setActiveSelection] = useState<string>("default");
+  const appliedPresetId =
+    activeSelection === "default" || activeSelection === "custom"
+      ? null
+      : activeSelection;
 
   const methods = useForm<Record<string, unknown>>({ defaultValues: DEFAULT_VALUES });
   const { watch, reset, getValues } = methods;
@@ -48,6 +62,9 @@ export default function Home() {
       if (syncLock.current === "string-to-form") return;
       // info.type is 'change' for user edits, undefined for reset()
       if (info?.type !== "change") return;
+      // User edited a field — they're now in custom territory, not on the
+      // default baseline (or any named preset, though those hide the form).
+      setActiveSelection("custom");
       syncLock.current = "form-to-string";
       try {
         // Lazy import because settings-sync pulls in ts-src (which uses
@@ -70,12 +87,13 @@ export default function Home() {
     return () => sub.unsubscribe();
   }, [watch]);
 
-  // string -> form
-  const onSettingsStringChange = useCallback(
-    async (str: string) => {
-      // Always reflect the pasted/typed text in the input, even if we can't
-      // (yet) parse it.
+  // string -> form.
+  // The optional `selection` arg sets which preset row button should appear
+  // highlighted after the change applies. Manual edits pass "custom".
+  const applySettingsString = useCallback(
+    async (str: string, selection: string = "custom") => {
       setSettingsString(str);
+      setActiveSelection(selection);
       if (syncLock.current === "form-to-string") return;
       if (!str.trim()) return;
       try {
@@ -92,6 +110,38 @@ export default function Home() {
     },
     [reset],
   );
+
+  const onSettingsStringChange = useCallback(
+    (str: string) => applySettingsString(str, "custom"),
+    [applySettingsString],
+  );
+
+  const onApplyPreset = useCallback(
+    (presetId: string, str: string) => {
+      applySettingsString(str, presetId);
+    },
+    [applySettingsString],
+  );
+
+  /**
+   * "Default" button: reset the form to neutral defaults, refresh the
+   * settings-string box to match, and flag the Default button as active.
+   * Leaves the form visible so the user can tweak from a clean baseline.
+   */
+  const onResetToDefault = useCallback(async () => {
+    setActiveSelection("default");
+    syncLock.current = "string-to-form";
+    reset(DEFAULT_VALUES);
+    queueMicrotask(() => {
+      if (syncLock.current === "string-to-form") syncLock.current = "none";
+    });
+    try {
+      const { formValuesToSettingsString } = await import("@/lib/settings-sync");
+      setSettingsString(formValuesToSettingsString(DEFAULT_VALUES));
+    } catch {
+      /* ignore */
+    }
+  }, [reset]);
 
   // One-shot on mount: render the initial (default) settings string so the
   // user has something to compare against.
@@ -237,25 +287,41 @@ export default function Home() {
           <CardHeader>
             <CardTitle>2. Settings string</CardTitle>
             <CardDescription>
-              Paste a settings string from the Java GUI or a shared preset — the
-              form below will update. Editing options also updates this string so
-              you can copy and share it.
+              Pick a preset below, or paste a settings string from the Java GUI.
+              Editing options further down updates this string so you can copy
+              and share it.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2">
-            <Label htmlFor="settings-string">Settings string</Label>
-            <Input
-              id="settings-string"
-              placeholder="Paste a settings string here, or edit the form below"
-              value={settingsString}
-              onChange={(e) => onSettingsStringChange(e.target.value)}
-              className="font-mono text-xs"
+          <CardContent className="space-y-4">
+            <PresetPicker
+              generation={loadedRom.detect.generation}
+              romName={loadedRom.detect.romName}
+              activeSelection={activeSelection}
+              onApply={onApplyPreset}
+              onReset={onResetToDefault}
             />
+
+            <div className="space-y-2">
+              <Label htmlFor="settings-string">Settings string</Label>
+              <Input
+                id="settings-string"
+                placeholder="Paste a settings string here, or pick a preset above"
+                value={settingsString}
+                onChange={(e) => onSettingsStringChange(e.target.value)}
+                className="font-mono text-xs"
+              />
+              {appliedPresetId && (
+                <p className="text-xs text-muted-foreground">
+                  Preset applied — the full options form is hidden. Edit the
+                  settings string above to switch to custom options.
+                </p>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}
 
-      {loadedRom && (
+      {loadedRom && !appliedPresetId && (
         <FormProvider {...methods}>
           <SettingsForm generation={loadedRom.detect.generation} />
         </FormProvider>

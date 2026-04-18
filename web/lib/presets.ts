@@ -1,0 +1,94 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Part of "randomize.sh" (https://github.com/justinelijahtaylor/randomizer)
+// A web fork of Universal Pokemon Randomizer ZX. Licensed under GPLv3-or-later.
+// See LICENSE.txt for the full license text.
+
+/**
+ * Preset settings strings, grouped by generation. Applying a preset writes
+ * its settings string into the Settings input on the main page, which
+ * triggers the existing string-to-form sync.
+ *
+ * To add a preset: paste the settings string from the Java GUI (with or
+ * without the 3-digit version prefix — both work) into the `settingsString`
+ * field. Set `gen` to the generation the preset targets so it only shows
+ * up for a matching ROM; set `romNames` to a list of ROM name substrings
+ * if the preset is specific to certain games within that gen.
+ */
+
+export interface Preset {
+  id: string;
+  name: string;
+  /** Generation this preset is designed for (1-4 today). */
+  gen: 1 | 2 | 3 | 4;
+  /**
+   * Optional list of ROM name substrings. If provided, the preset only
+   * appears for ROMs whose detected name contains one of these (case-
+   * insensitive). If omitted, the preset applies to any ROM of the right
+   * generation.
+   */
+  romNames?: string[];
+  settingsString: string;
+}
+
+export const PRESETS: Preset[] = [
+  // ---- Gen 1 (Red / Blue / Yellow) ----
+  {
+    id: "gen1-kaizo",
+    name: "Kaizo",
+    gen: 1,
+    settingsString:
+      "321WRIEAQIZAIUAAACRAAKeBgMECQEAFAABCQAOAgAAAAAAAAho5ATkAQAICTIGBQMyAAIYElBva2Vtb24gWWVsbG93IChVKVXr5SHjwziK",
+  },
+  // ---- Gen 2 (Gold / Silver / Crystal) ----
+  {
+    id: "gen2-kaizo",
+    name: "Kaizo",
+    gen: 2,
+    settingsString:
+      "321WRIEATIZAIUAAACRAAKeBhsESQEAFAAKCQAuAgAAAAAAABgI5ATkAQAICTIGBQMyAAIYF1Bva2Vtb24gQ3J5c3RhbCAoVSAxLjEpS6ygxePDOIo",
+  },
+  // ---- Gen 3 (Ruby / Sapphire / Emerald, FireRed / LeafGreen) ----
+  {
+    id: "gen3-kaizo-rse",
+    name: "Kaizo",
+    gen: 3,
+    romNames: ["Ruby", "Sapphire", "Emerald"],
+    settingsString:
+      "321WRIEEjL8AP8AAgGRAAKeBhsECQEAFAACCQAuEgAAAAAABBC45ATkAYYICTIGBAIyAAUYC0VtZXJhbGQgKFUpY5koIePDOIo",
+  },
+  {
+    id: "gen3-kaizo-frlg",
+    name: "Kaizo",
+    gen: 3,
+    romNames: ["Fire Red", "Leaf Green"],
+    settingsString:
+      "321WRIEEjIBAAQABwCRAAKeBhsECQEAFAACCQAuEgAAAAAABRi45ATkAYYICTIGBAIyAAUYEEZpcmUgUmVkIChVKSAxLjF0u1o648M4ig",
+  },
+  // ---- Gen 4 (Diamond / Pearl / Platinum, HeartGold / SoulSilver) ----
+  {
+    id: "gen4-kaizo-dppt",
+    name: "Kaizo",
+    gen: 4,
+    romNames: ["Diamond", "Pearl", "Platinum"],
+    settingsString:
+      "321WRIEEjLDAXQA+ACRAAKeBhsECQEAFAACCQAuEgAAAAAADBCI5ATkQYYICTIGBQIyAAUYGlBva2Vtb24gUGxhdGludW0gKFUgUmV2IDEpJe8DjOPDOIo=",
+  },
+  {
+    id: "gen4-kaizo-hgss",
+    name: "Kaizo",
+    gen: 4,
+    romNames: ["HeartGold", "SoulSilver"],
+    settingsString:
+      "321WRIEEgKYAJsAngCRAAKeBhsECQEAFAACCQAuEgAAAAAADBCI5ATkQYYICTIGBQIyAAUYFlBva2Vtb24gU291bFNpbHZlciAoVSnJuKMx48M4ig==",
+  },
+];
+
+/** Presets applicable to a given ROM (by generation + optional name match). */
+export function presetsForRom(gen: number, romName: string | null): Preset[] {
+  const nameLower = (romName ?? "").toLowerCase();
+  return PRESETS.filter((p) => {
+    if (p.gen !== gen) return false;
+    if (!p.romNames || p.romNames.length === 0) return true;
+    return p.romNames.some((needle) => nameLower.includes(needle.toLowerCase()));
+  });
+}
