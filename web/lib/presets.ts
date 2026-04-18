@@ -47,7 +47,23 @@ export const PRESETS: Preset[] = [
     settingsString:
       "321WRIEATIZAIUAAACRAAKeBhsESQEAFAAKCQAuAgAAAAAAABgI5ATkAQAICTIGBQMyAAIYF1Bva2Vtb24gQ3J5c3RhbCAoVSAxLjEpS6ygxePDOIo",
   },
-  // ---- Gen 3 presets will go here. ----
+  // ---- Gen 3 (Ruby / Sapphire / Emerald, FireRed / LeafGreen) ----
+  {
+    id: "gen3-kaizo-rse",
+    name: "Kaizo",
+    gen: 3,
+    romNames: ["Ruby", "Sapphire", "Emerald"],
+    settingsString:
+      "321WRIEEjL8AP8AAgGRAAKeBhsECQEAFAACCQAuEgAAAAAABBC45ATkAYYICTIGBAIyAAUYC0VtZXJhbGQgKFUpY5koIePDOIo",
+  },
+  {
+    id: "gen3-kaizo-frlg",
+    name: "Kaizo",
+    gen: 3,
+    romNames: ["Fire Red", "Leaf Green"],
+    settingsString:
+      "321WRIEEjIBAAQABwCRAAKeBhsECQEAFAACCQAuEgAAAAAABRi45ATkAYYICTIGBAIyAAUYEEZpcmUgUmVkIChVKSAxLjF0u1o648M4ig",
+  },
   // ---- Gen 4 presets will go here. ----
 ];
 
