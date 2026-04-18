@@ -31,10 +31,17 @@ export interface Preset {
 }
 
 export const PRESETS: Preset[] = [
-  // Gen 1 presets will go here.
-  // Gen 2 presets will go here.
-  // Gen 3 presets will go here.
-  // Gen 4 presets will go here.
+  // ---- Gen 1 (Red / Blue / Yellow) ----
+  {
+    id: "gen1-kaizo",
+    name: "Kaizo",
+    gen: 1,
+    settingsString:
+      "321WRIEAQIZAIUAAACRAAKeBgMECQEAFAABCQAOAgAAAAAAAAho5ATkAQAICTIGBQMyAAIYElBva2Vtb24gWWVsbG93IChVKVXr5SHjwziK",
+  },
+  // ---- Gen 2 presets will go here. ----
+  // ---- Gen 3 presets will go here. ----
+  // ---- Gen 4 presets will go here. ----
 ];
 
 /** Presets applicable to a given ROM (by generation + optional name match). */
