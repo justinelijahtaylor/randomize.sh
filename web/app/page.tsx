@@ -115,6 +115,26 @@ export default function Home() {
     [applySettingsString],
   );
 
+  /**
+   * "Default" preset: clear any applied preset, reset the form to neutral
+   * defaults, and refresh the settings-string box to match. Leaves the form
+   * visible so the user can tweak from a clean baseline.
+   */
+  const onResetToDefault = useCallback(async () => {
+    setAppliedPresetId(null);
+    syncLock.current = "string-to-form";
+    reset(DEFAULT_VALUES);
+    queueMicrotask(() => {
+      if (syncLock.current === "string-to-form") syncLock.current = "none";
+    });
+    try {
+      const { formValuesToSettingsString } = await import("@/lib/settings-sync");
+      setSettingsString(formValuesToSettingsString(DEFAULT_VALUES));
+    } catch {
+      /* ignore */
+    }
+  }, [reset]);
+
   // One-shot on mount: render the initial (default) settings string so the
   // user has something to compare against.
   useEffect(() => {
@@ -270,6 +290,7 @@ export default function Home() {
               romName={loadedRom.detect.romName}
               appliedPresetId={appliedPresetId}
               onApply={onApplyPreset}
+              onReset={onResetToDefault}
             />
 
             <div className="space-y-2">

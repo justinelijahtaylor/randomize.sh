@@ -15,19 +15,32 @@ interface Props {
   /** ID of the currently-applied preset, if any. */
   appliedPresetId: string | null;
   onApply: (presetId: string, settingsString: string) => void;
+  /**
+   * Reset every setting back to the randomizer's neutral defaults and keep
+   * the full options form visible. Treated as the implicit "no preset"
+   * option on the left of the preset row.
+   */
+  onReset: () => void;
 }
 
 /**
  * Inline preset picker — renders as a row of buttons, meant to sit inside
  * the Settings string card. The active preset (if any) is highlighted.
  */
-export function PresetPicker({ generation, romName, appliedPresetId, onApply }: Props) {
+export function PresetPicker({ generation, romName, appliedPresetId, onApply, onReset }: Props) {
   const applicable = presetsForRom(generation, romName);
-  if (applicable.length === 0) return null;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       <span className="text-xs text-muted-foreground mr-1">Presets:</span>
+      <Button
+        type="button"
+        variant={appliedPresetId === null ? "default" : "outline"}
+        size="sm"
+        onClick={onReset}
+      >
+        Default
+      </Button>
       {applicable.map((p) => {
         const active = appliedPresetId === p.id;
         return (
